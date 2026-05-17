@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X } from 'lucide-react';
 import { Button } from './Button';
 
-export const Navbar = () => {
+export const Navbar = ({ onSignIn }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -59,7 +59,7 @@ export const Navbar = () => {
 
           {/* CTA Button */}
           <div className="hidden md:flex items-center gap-4">
-            <Button variant="secondary" size="sm">
+            <Button variant="secondary" size="sm" onClick={onSignIn}>
               Sign In
             </Button>
             <Button variant="primary" size="sm">
@@ -100,7 +100,7 @@ export const Navbar = () => {
                   </a>
                 ))}
                 <div className="flex flex-col gap-3 pt-4">
-                  <Button variant="secondary" size="sm" className="w-full">
+                  <Button variant="secondary" size="sm" className="w-full" onClick={onSignIn}>
                     Sign In
                   </Button>
                   <Button variant="primary" size="sm" className="w-full">

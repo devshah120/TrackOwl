@@ -1,3 +1,4 @@
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { TrustedCompanies } from './components/TrustedCompanies';
@@ -10,22 +11,41 @@ import { Pricing } from './components/Pricing';
 import { FAQ } from './components/FAQ';
 import { CTA } from './components/CTA';
 import { Footer } from './components/Footer';
+import { Login } from './components/Login';
 
 function App() {
+  const navigate = useNavigate();
+
+  const handleSignIn = () => {
+    navigate('/login');
+  };
+
+  const handleBackHome = () => {
+    navigate('/');
+  };
+
   return (
-    <div className="bg-white overflow-hidden">
-      <Navbar />
-      <Hero />
-      <TrustedCompanies />
-      <Features />
-      <ProductShowcaseSection />
-      <HowItWorks />
-      <Testimonials />
-      <Pricing />
-      <FAQ />
-      <CTA />
-      <Footer />
-    </div>
+    <Routes>
+      <Route path="/login" element={<Login onBackHome={handleBackHome} />} />
+      <Route
+        path="/"
+        element={
+          <div className="bg-white overflow-hidden">
+            <Navbar onSignIn={handleSignIn} />
+            <Hero onSignIn={handleSignIn} />
+            <TrustedCompanies />
+            <Features />
+            <ProductShowcaseSection />
+            <HowItWorks />
+            <Testimonials />
+            <Pricing />
+            <FAQ />
+            <CTA onSignIn={handleSignIn} />
+            <Footer />
+          </div>
+        }
+      />
+    </Routes>
   );
 }
 

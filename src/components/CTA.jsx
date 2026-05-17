@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { Button } from './Button';
 import { ArrowRight } from 'lucide-react';
 
-export const CTA = () => {
+export const CTA = ({ onSignIn }) => {
   return (
     <section className="py-20 relative overflow-hidden">
       <motion.div
@@ -46,7 +46,7 @@ export const CTA = () => {
             viewport={{ once: true }}
             className="flex flex-col sm:flex-row gap-4 justify-center"
           >
-            <Button variant="primary" size="lg">
+            <Button variant="primary" size="lg" onClick={onSignIn}>
               Start Free Trial <ArrowRight size={20} />
             </Button>
             <Button variant="secondary" size="lg">

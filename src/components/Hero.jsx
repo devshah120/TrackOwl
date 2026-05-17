@@ -2,7 +2,7 @@ import { motion } from 'framer-motion';
 import { Button } from './Button';
 import { ArrowRight, TrendingUp, MapPin, AlertCircle, FileText } from 'lucide-react';
 
-export const Hero = () => {
+export const Hero = ({ onSignIn }) => {
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -68,7 +68,7 @@ export const Hero = () => {
             variants={itemVariants}
             className="flex flex-col sm:flex-row gap-4 justify-center mb-12"
           >
-            <Button variant="primary" size="lg">
+            <Button variant="primary" size="lg" onClick={onSignIn}>
               Start Free Trial <ArrowRight size={20} />
             </Button>
             <Button variant="secondary" size="lg">
