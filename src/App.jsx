@@ -3,6 +3,7 @@ import { Hero } from './components/Hero';
 import { TrustedCompanies } from './components/TrustedCompanies';
 import { Features } from './components/Features';
 import { PremiumFeatures } from './components/PremiumFeatures';
+import { ProductShowcaseSection } from './components/ProductShowcaseSection';
 import { HowItWorks } from './components/HowItWorks';
 import { Testimonials } from './components/Testimonials';
 import { Pricing } from './components/Pricing';
@@ -17,6 +18,7 @@ function App() {
       <Hero />
       <TrustedCompanies />
       <Features />
+      <ProductShowcaseSection />
       <HowItWorks />
       <Testimonials />
       <Pricing />
