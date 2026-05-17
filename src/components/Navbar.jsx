@@ -24,7 +24,7 @@ export const Navbar = () => {
   return (
     <motion.nav
       className={`fixed w-full z-50 transition-all duration-300 ${
-        isScrolled ? 'glassmorphism shadow-lg' : ''
+        isScrolled ? 'glassmorphism shadow-lg' : 'bg-white'
       }`}
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -76,18 +76,19 @@ export const Navbar = () => {
             {isOpen ? <X size={24} /> : <Menu size={24} />}
           </motion.button>
         </div>
+      </div>
 
-        {/* Mobile Navigation */}
-        <AnimatePresence>
-          {isOpen && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.3 }}
-              className="md:hidden overflow-hidden"
-            >
-              <div className="py-4 space-y-4">
+      {/* Mobile Navigation - Outside max-w-7xl to span full width */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3 }}
+            className="md:hidden overflow-hidden bg-white border-t border-gray-200 w-full"
+          >
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 space-y-4">
                 {navLinks.map((link) => (
                   <a
                     key={link.label}
@@ -106,11 +107,10 @@ export const Navbar = () => {
                     Get Started
                   </Button>
                 </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.nav>
   );
 };
