@@ -66,9 +66,9 @@ export const Footer = () => {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true }}
-          className="py-16 grid grid-cols-1 md:grid-cols-4 gap-12"
+          className="py-16 grid grid-cols-1 md:grid-cols-2 gap-12"
         >
-          {/* Brand */}
+          {/* Left Column - Brand */}
           <motion.div variants={itemVariants}>
             <div className="flex items-center gap-2 mb-4">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-emerald-500 rounded-lg flex items-center justify-center">
@@ -81,24 +81,26 @@ export const Footer = () => {
             </p>
           </motion.div>
 
-          {/* Links */}
-          {Object.entries(links).map(([category, items]) => (
-            <motion.div key={category} variants={itemVariants}>
-              <h3 className="font-semibold text-white mb-4">{category}</h3>
-              <ul className="space-y-3">
-                {items.map((item) => (
-                  <li key={item.label}>
-                    <a
-                      href={item.href}
-                      className="text-gray-400 hover:text-white transition-colors text-sm"
-                    >
-                      {item.label}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </motion.div>
-          ))}
+          {/* Right Column - Links Grid */}
+          <motion.div variants={itemVariants} className="grid grid-cols-3 gap-8">
+            {Object.entries(links).map(([category, items]) => (
+              <div key={category}>
+                <h3 className="font-semibold text-white mb-4">{category}</h3>
+                <ul className="space-y-3">
+                  {items.map((item) => (
+                    <li key={item.label}>
+                      <a
+                        href={item.href}
+                        className="text-gray-400 hover:text-white transition-colors text-sm"
+                      >
+                        {item.label}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </motion.div>
         </motion.div>
 
         {/* Divider */}
