@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X } from 'lucide-react';
 import { Button } from './Button';
 
-export const Navbar = ({ onSignIn }) => {
+export const Navbar = ({ onSignIn, onGetStarted }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -62,7 +62,7 @@ export const Navbar = ({ onSignIn }) => {
             <Button variant="secondary" size="sm" onClick={onSignIn}>
               Sign In
             </Button>
-            <Button variant="primary" size="sm">
+            <Button variant="primary" size="sm" onClick={onGetStarted}>
               Get Started
             </Button>
           </div>
@@ -103,7 +103,7 @@ export const Navbar = ({ onSignIn }) => {
                   <Button variant="secondary" size="sm" className="w-full" onClick={onSignIn}>
                     Sign In
                   </Button>
-                  <Button variant="primary" size="sm" className="w-full">
+                  <Button variant="primary" size="sm" className="w-full" onClick={onGetStarted}>
                     Get Started
                   </Button>
                 </div>

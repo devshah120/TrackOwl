@@ -234,7 +234,7 @@ export function Login({ onBackHome }) {
 
           {/* Footer */}
           <p className="mt-6 text-center text-sm text-slate-600">
-            New client? <a href="#" className="text-blue-600 hover:text-blue-700 font-medium">Register your fleet →</a>
+            New client? <a href="/register" className="text-blue-600 hover:text-blue-700 font-medium">Register your fleet →</a>
           </p>
         </div>
       </div>

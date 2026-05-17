@@ -12,12 +12,17 @@ import { FAQ } from './components/FAQ';
 import { CTA } from './components/CTA';
 import { Footer } from './components/Footer';
 import { Login } from './components/Login';
+import { Register } from './components/Register';
 
 function App() {
   const navigate = useNavigate();
 
   const handleSignIn = () => {
     navigate('/login');
+  };
+
+  const handleGetStarted = () => {
+    navigate('/register');
   };
 
   const handleBackHome = () => {
@@ -27,12 +32,13 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login onBackHome={handleBackHome} />} />
+      <Route path="/register" element={<Register onBackHome={handleBackHome} />} />
       <Route
         path="/"
         element={
           <div className="bg-white overflow-hidden">
-            <Navbar onSignIn={handleSignIn} />
-            <Hero onSignIn={handleSignIn} />
+            <Navbar onSignIn={handleSignIn} onGetStarted={handleGetStarted} />
+            <Hero onSignIn={handleSignIn} onGetStarted={handleGetStarted} />
             <TrustedCompanies />
             <Features />
             <ProductShowcaseSection />
@@ -40,7 +46,7 @@ function App() {
             <Testimonials />
             <Pricing />
             <FAQ />
-            <CTA onSignIn={handleSignIn} />
+            <CTA onSignIn={handleSignIn} onGetStarted={handleGetStarted} />
             <Footer />
           </div>
         }
