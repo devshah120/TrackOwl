@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Sidebar } from '../components/Sidebar';
+import { Topbar } from '../components/Topbar';
 import { Dashboard } from './Dashboard';
 import { ComingSoon } from './ComingSoon';
 import { FleetMap } from './FleetMap';
@@ -25,10 +25,10 @@ export function DashboardLayout() {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50">
-      <Sidebar activeMenu={activeMenu} onMenuChange={setActiveMenu} />
+    <div className="flex flex-col h-screen bg-slate-50">
+      <Topbar activeMenu={activeMenu} onMenuChange={setActiveMenu} />
       <main className="flex-1 overflow-y-auto">
-        <div className="p-6 max-w-7xl">{renderPage()}</div>
+        <div className="p-6 w-full">{renderPage()}</div>
       </main>
     </div>
   );
