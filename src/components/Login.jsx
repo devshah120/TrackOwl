@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
 import { FaWhatsapp } from 'react-icons/fa';
+import { useNavigate } from 'react-router-dom';
 import loginTruckImg from '../assets/login-truck.jpg';
+import { useAuth } from '../context/AuthContext';
 
 export function Login({ onBackHome }) {
   const [email, setEmail] = useState('');
@@ -9,72 +11,46 @@ export function Login({ onBackHome }) {
   const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(false);
   const [alert, setAlert] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  const USERS = [
-    { name: 'Dipesh', email: 'hello@trackowl.in', password: 'TrackOwl@2026', company: 'TrackOwl', fleet: '50+ trucks', role: 'admin' },
-    { name: 'Demo Client', email: 'demo@trackowl.in', password: 'Demo@1234', company: 'Demo Transport Co.', fleet: '6–20 trucks', role: 'client' }
-  ];
+  const { login, isLoading, error } = useAuth();
+  const navigate = useNavigate();
 
   const showAlert = (msg, type) => {
     setAlert({ msg, type });
     setTimeout(() => setAlert(null), 5000);
   };
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    setLoading(true);
 
     const emailLower = email.trim().toLowerCase();
-    const errors = {};
 
     if (!emailLower || !emailLower.includes('@')) {
-      errors.email = 'Please enter a valid email.';
+      showAlert('Please enter a valid email.', 'error');
+      return;
     }
     if (!password) {
-      errors.password = 'Password is required.';
-    }
-
-    if (Object.keys(errors).length > 0) {
-      setLoading(false);
+      showAlert('Password is required.', 'error');
       return;
     }
 
-    setTimeout(() => {
-      let user = USERS.find(u => u.email === emailLower);
-
-      if (!user) {
-        try {
-          const reg = JSON.parse(localStorage.getItem('to_users') || '[]');
-          user = reg.find(u => u.email === emailLower);
-        } catch (e) {}
-      }
-
-      if (!user) {
-        showAlert('No account found with this email.', 'error');
-        setLoading(false);
-        return;
-      }
-
-      if (user.password !== password) {
-        showAlert('Incorrect password. Please try again.', 'error');
-        setLoading(false);
-        return;
-      }
+    try {
+      const response = await login(emailLower, password);
+      showAlert(`Welcome, ${response.user.name}! Opening dashboard…`, 'success');
 
       localStorage.setItem('to_session', JSON.stringify({
-        name: user.name,
-        email: user.email,
-        company: user.company,
-        fleet: user.fleet,
-        role: user.role
+        name: response.user.name,
+        email: response.user.email,
+        company: response.user.company,
+        fleet: response.user.fleet,
+        role: response.user.role
       }));
 
-      showAlert(`Welcome, ${user.name}! Opening dashboard…`, 'success');
       setTimeout(() => {
-        window.location.href = user.role === 'admin' ? 'super-admin.html' : 'dashboard.html';
+        navigate('/dashboard');
       }, 700);
-    }, 600);
+    } catch (err) {
+      showAlert(err.message || 'Login failed. Please try again.', 'error');
+    }
   };
 
   return (
@@ -207,10 +183,10 @@ export function Login({ onBackHome }) {
             {/* Sign In Button */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={isLoading}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Signing in…' : 'Sign in to dashboard'}
+              {isLoading ? 'Signing in…' : 'Sign in to dashboard'}
             </button>
           </form>
 

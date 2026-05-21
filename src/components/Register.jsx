@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Eye, EyeOff, User, Mail, Phone, Lock, Building2, Check } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import loginTruckImg from '../assets/login-truck.jpg';
+import { useAuth } from '../context/AuthContext';
 
 export function Register({ onBackHome }) {
   const [step, setStep] = useState(1);
   const [alert, setAlert] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [selectedFleet, setSelectedFleet] = useState(null);
 
@@ -19,6 +20,9 @@ export function Register({ onBackHome }) {
   // Step 2 data
   const [company, setCompany] = useState('');
   const [termsAccepted, setTermsAccepted] = useState(false);
+
+  const { register, isLoading } = useAuth();
+  const navigate = useNavigate();
 
   const fleetOptions = [
     { label: '1–5 trucks', value: '1–5 trucks' },
@@ -83,50 +87,32 @@ export function Register({ onBackHome }) {
     return true;
   };
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     if (!validateStep2()) return;
 
-    setLoading(true);
-
-    setTimeout(() => {
+    try {
       const emailLower = email.trim().toLowerCase();
+      const response = await register({
+        name,
+        email: emailLower,
+        password,
+        mobile: mobile.replace(/\D/g, ''),
+        company,
+        fleet: selectedFleet
+      });
 
-      // Check for duplicate
-      try {
-        const existing = JSON.parse(localStorage.getItem('to_users') || '[]');
-        if (existing.find(u => u.email === emailLower)) {
-          showAlert('An account with this email already exists. Sign in instead.', 'error');
-          setLoading(false);
-          return;
-        }
+      localStorage.setItem('to_session', JSON.stringify({
+        name: response.user.name,
+        email: response.user.email,
+        company: response.user.company,
+        fleet: response.user.fleet,
+        role: response.user.role
+      }));
 
-        // Save new user
-        existing.push({
-          name,
-          email: emailLower,
-          password,
-          mobile: mobile.replace(/\D/g, ''),
-          company,
-          fleet: selectedFleet,
-          role: 'client'
-        });
-        localStorage.setItem('to_users', JSON.stringify(existing));
-
-        // Save session
-        localStorage.setItem('to_session', JSON.stringify({
-          name,
-          email: emailLower,
-          company,
-          fleet: selectedFleet,
-          role: 'client'
-        }));
-
-        setStep(3);
-      } catch (e) {
-        showAlert('An error occurred. Please try again.', 'error');
-        setLoading(false);
-      }
-    }, 600);
+      setStep(3);
+    } catch (err) {
+      showAlert(err.message || 'Registration failed. Please try again.', 'error');
+    }
   };
 
   const getPasswordStrengthColor = () => {
@@ -406,10 +392,10 @@ export function Register({ onBackHome }) {
                 </button>
                 <button
                   onClick={handleRegister}
-                  disabled={loading}
+                  disabled={isLoading}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {loading ? 'Creating account…' : 'Create account & start trial'}
+                  {isLoading ? 'Creating account…' : 'Create account & start trial'}
                 </button>
               </div>
             </div>
@@ -421,8 +407,8 @@ export function Register({ onBackHome }) {
               <div className="text-5xl mb-4">🎉</div>
               <h2 className="text-2xl font-bold text-slate-900 mb-2 font-display">Welcome to TrackOwl!</h2>
               <p className="text-slate-600 mb-6">Your account has been created successfully!</p>
-              <button onClick={onBackHome} className="inline-block w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors text-center">
-                Go back home →
+              <button onClick={() => navigate('/dashboard')} className="inline-block w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors text-center">
+                Open Dashboard →
               </button>
             </div>
           )}

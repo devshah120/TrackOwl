@@ -13,6 +13,8 @@ import { CTA } from './components/CTA';
 import { Footer } from './components/Footer';
 import { Login } from './components/Login';
 import { Register } from './components/Register';
+import { DashboardLayout } from './pages/DashboardLayout';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 function App() {
   const navigate = useNavigate();
@@ -33,6 +35,14 @@ function App() {
     <Routes>
       <Route path="/login" element={<Login onBackHome={handleBackHome} />} />
       <Route path="/register" element={<Register onBackHome={handleBackHome} />} />
+      <Route
+        path="/dashboard/*"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout />
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/"
         element={
