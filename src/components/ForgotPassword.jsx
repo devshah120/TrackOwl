@@ -18,7 +18,7 @@ export function ForgotPassword({ onBackHome }) {
   const [passwordStrength, setPasswordStrength] = useState({ level: '', color: '' });
   const [canResend, setCanResend] = useState(false);
 
-  const API_URL = 'http://localhost:5000/api/auth';
+  const API_URL = `${import.meta.env.VITE_API_URL}/auth`;
 
   useEffect(() => {
     if (step === 2 && countdown > 0) {
