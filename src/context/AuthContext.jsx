@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { auth, getAuthToken, setAuthToken, clearAuthToken } from '../services/api';
 
 const AuthContext = createContext();
@@ -13,18 +13,44 @@ export const useAuth = () => {
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [error, setError] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
-    const token = getAuthToken();
-    if (token) {
-      verifyToken();
-    }
+    const checkAuth = async () => {
+      try {
+        const token = getAuthToken();
+        console.log('🔍 Checking auth on mount, token exists:', !!token);
+        if (token) {
+          try {
+            console.log('🔐 Token found, calling verify endpoint...');
+            const response = await auth.verifyToken();
+            console.log('✅ Token verified:', response);
+            setUser(response.user);
+            setIsAuthenticated(true);
+            setError(null);
+          } catch (err) {
+            console.error('❌ Token verification failed:', err);
+            clearAuthToken();
+            setUser(null);
+            setIsAuthenticated(false);
+            setError(err.message);
+          }
+        } else {
+          console.log('⚠️ No token found on mount');
+          setIsAuthenticated(false);
+        }
+      } finally {
+        setIsLoading(false);
+        setIsInitialized(true);
+      }
+    };
+    checkAuth();
   }, []);
 
-  const verifyToken = async () => {
+  const verifyToken = useCallback(async () => {
     try {
       setIsLoading(true);
       const response = await auth.verifyToken();
@@ -39,7 +65,7 @@ export function AuthProvider({ children }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   const login = async (email, password) => {
     try {
@@ -85,6 +111,7 @@ export function AuthProvider({ children }) {
   const value = {
     user,
     isLoading,
+    isInitialized,
     error,
     isAuthenticated,
     login,
