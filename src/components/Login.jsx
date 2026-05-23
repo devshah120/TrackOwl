@@ -177,7 +177,7 @@ export function Login({ onBackHome }) {
                 />
                 Remember me
               </label>
-              <a href="#" className="text-sm text-blue-600 hover:text-blue-700">Forgot password?</a>
+              <a href="/forgot-password" className="text-sm text-blue-600 hover:text-blue-700">Forgot password?</a>
             </div>
 
             {/* Sign In Button */}

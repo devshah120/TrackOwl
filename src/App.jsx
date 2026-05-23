@@ -13,6 +13,7 @@ import { CTA } from './components/CTA';
 import { Footer } from './components/Footer';
 import { Login } from './components/Login';
 import { Register } from './components/Register';
+import { ForgotPassword } from './components/ForgotPassword';
 import { DashboardLayout } from './pages/DashboardLayout';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
@@ -34,6 +35,7 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login onBackHome={handleBackHome} />} />
+      <Route path="/forgot-password" element={<ForgotPassword onBackHome={handleBackHome} />} />
       <Route path="/register" element={<Register onBackHome={handleBackHome} />} />
       <Route
         path="/dashboard/*"
