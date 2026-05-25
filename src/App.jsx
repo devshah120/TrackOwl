@@ -15,6 +15,13 @@ import { Login } from './components/Login';
 import { Register } from './components/Register';
 import { ForgotPassword } from './components/ForgotPassword';
 import { DashboardLayout } from './pages/DashboardLayout';
+import { TripsAndDocuments } from './pages/TripsAndDocuments';
+import { AddNewTrip } from './pages/AddNewTrip';
+import { DailyLedger } from './pages/DailyLedger';
+import { AddLedgerEntry } from './pages/AddLedgerEntry';
+import { FleetAndDrivers } from './pages/FleetAndDrivers';
+import { AddNewTruck } from './pages/AddNewTruck';
+import { SettingsPage } from './pages/Settings';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
 function App() {
@@ -42,6 +49,62 @@ function App() {
         element={
           <ProtectedRoute>
             <DashboardLayout />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/trips-and-documents"
+        element={
+          <ProtectedRoute>
+            <TripsAndDocuments />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/add-new-trip"
+        element={
+          <ProtectedRoute>
+            <AddNewTrip />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/daily-ledger"
+        element={
+          <ProtectedRoute>
+            <DailyLedger />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/add-ledger-entry"
+        element={
+          <ProtectedRoute>
+            <AddLedgerEntry />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/fleet-and-drivers"
+        element={
+          <ProtectedRoute>
+            <FleetAndDrivers />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/add-new-truck"
+        element={
+          <ProtectedRoute>
+            <AddNewTruck />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <SettingsPage />
           </ProtectedRoute>
         }
       />

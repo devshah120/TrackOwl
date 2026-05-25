@@ -68,7 +68,7 @@ export function Login({ onBackHome }) {
           <div>
             <button onClick={onBackHome} className="flex items-center gap-2 text-white hover:opacity-80">
               <span className="text-xl font-bold">
-                Track<span className="text-amber-300">Owl</span>
+                Track<span className="text-blue-600">Owl</span>
               </span>
             </button>
           </div>
@@ -106,7 +106,7 @@ export function Login({ onBackHome }) {
           <div className="mb-8">
             <button onClick={onBackHome} className="lg:hidden flex items-center gap-2 mb-6 text-slate-900 hover:opacity-70">
               <span className="text-xl font-bold">
-                Track<span className="text-amber-300">Owl</span>
+                Track<span className="text-blue-600">Owl</span>
               </span>
             </button>
             <h1 className="text-3xl font-bold text-slate-900 font-display">Welcome back</h1>

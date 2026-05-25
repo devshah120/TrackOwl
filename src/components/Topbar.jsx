@@ -51,6 +51,14 @@ export function Topbar({ activeMenu, onMenuChange }) {
     navigate('/login');
   };
 
+  const handleMenuClick = (itemId) => {
+    if (itemId === 'trips') {
+      navigate('/trips-and-documents');
+    } else {
+      onMenuChange(itemId);
+    }
+  };
+
   return (
     <>
       {/* Top Navigation Bar */}
@@ -61,7 +69,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
             {/* Logo */}
             <div className="flex-shrink-0">
               <h1 className="text-2xl font-bold">
-                Track<span className="text-amber-300">Owl</span>
+                Track<span className="text-blue-600">Owl</span>
               </h1>
             </div>
 
@@ -73,7 +81,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
                 return (
                   <button
                     key={item.id}
-                    onClick={() => onMenuChange(item.id)}
+                    onClick={() => handleMenuClick(item.id)}
                     className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
                       isActive
                         ? 'bg-blue-50 text-blue-600 font-medium'
@@ -239,7 +247,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
                   <button
                     key={item.id}
                     onClick={() => {
-                      onMenuChange(item.id);
+                      handleMenuClick(item.id);
                       setIsMenuOpen(false);
                     }}
                     className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${

@@ -229,7 +229,7 @@ export function ForgotPassword({ onBackHome }) {
           <div>
             <button onClick={() => navigate('/login')} className="flex items-center gap-2 text-white hover:opacity-80">
               <span className="text-xl font-bold">
-                Track<span className="text-amber-300">Owl</span>
+                Track<span className="text-blue-600">Owl</span>
               </span>
             </button>
           </div>

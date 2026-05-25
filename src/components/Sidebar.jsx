@@ -21,6 +21,21 @@ export function Sidebar({ activeMenu, onMenuChange }) {
     navigate('/login');
   };
 
+  const handleMenuItemClick = (itemId) => {
+    if (itemId === 'dashboard') {
+      navigate('/dashboard');
+    } else if (itemId === 'trips') {
+      navigate('/trips-and-documents');
+    } else if (itemId === 'ledger') {
+      navigate('/daily-ledger');
+    } else if (itemId === 'fleet') {
+      navigate('/fleet-and-drivers');
+    } else if (itemId === 'settings') {
+      navigate('/settings');
+    }
+    onMenuChange(itemId);
+  };
+
   return (
     <>
       {/* Mobile Toggle */}
@@ -41,7 +56,7 @@ export function Sidebar({ activeMenu, onMenuChange }) {
           {/* Logo */}
           <div className="mb-8 mt-4 md:mt-0">
             <h1 className="text-2xl font-bold">
-              Track<span className="text-amber-300">Owl</span>
+              Track<span className="text-blue-600">Owl</span>
             </h1>
             <p className="text-slate-400 text-sm mt-1">Fleet Management</p>
           </div>
@@ -62,7 +77,7 @@ export function Sidebar({ activeMenu, onMenuChange }) {
                 <button
                   key={item.id}
                   onClick={() => {
-                    onMenuChange(item.id);
+                    handleMenuItemClick(item.id);
                     setIsOpen(false);
                   }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
