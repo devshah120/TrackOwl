@@ -3,6 +3,7 @@ import { Plus, Search, Edit2, Trash2, Filter, ChevronDown, LayoutDashboard, Cale
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
+import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export function DailyLedger() {
   const navigate = useNavigate();
@@ -13,6 +14,9 @@ export function DailyLedger() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [filterType, setFilterType] = useState('month');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -135,26 +139,58 @@ export function DailyLedger() {
     },
   ]);
 
+  const getDateRange = () => {
+    const today = new Date();
+    let start, end;
+
+    switch (filterType) {
+      case 'month':
+        start = new Date(selectedMonth + '-01');
+        end = new Date(new Date(start).setMonth(start.getMonth() + 1));
+        end.setDate(0);
+        break;
+      case 'lastweek':
+        end = new Date(today);
+        start = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'custom':
+        start = fromDate ? new Date(fromDate) : new Date(0);
+        end = toDate ? new Date(toDate) : today;
+        break;
+      default:
+        start = new Date(0);
+        end = today;
+    }
+
+    return { start, end };
+  };
+
+  const { start: rangeStart, end: rangeEnd } = getDateRange();
+
   const filteredEntries = ledgerEntries.filter((entry) => {
     const matchesSearch =
       entry.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       entry.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
       entry.category.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const monthMatch = entry.date.startsWith(selectedMonth);
+    const entryDate = new Date(entry.date);
+    const dateMatch = entryDate >= rangeStart && entryDate <= rangeEnd;
 
-    if (activeView === 'all') return matchesSearch && monthMatch;
-    if (activeView === 'income') return matchesSearch && monthMatch && entry.type === 'income';
-    if (activeView === 'expense') return matchesSearch && monthMatch && entry.type === 'expense';
-    return matchesSearch && monthMatch;
+    if (activeView === 'all') return matchesSearch && dateMatch;
+    if (activeView === 'income') return matchesSearch && dateMatch && entry.type === 'income';
+    if (activeView === 'expense') return matchesSearch && dateMatch && entry.type === 'expense';
+    return matchesSearch && dateMatch;
   });
 
-  const calculateMonthlyStats = () => {
-    const monthEntries = ledgerEntries.filter(e => e.date.startsWith(selectedMonth));
-    const income = monthEntries
+  const calculateStats = () => {
+    const filteredForStats = ledgerEntries.filter(e => {
+      const entryDate = new Date(e.date);
+      return entryDate >= rangeStart && entryDate <= rangeEnd;
+    });
+    const income = filteredForStats
       .filter(e => e.type === 'income')
       .reduce((sum, e) => sum + e.amount, 0);
-    const expenses = monthEntries
+    const expenses = filteredForStats
       .filter(e => e.type === 'expense')
       .reduce((sum, e) => sum + e.amount, 0);
     const collected = income;
@@ -163,7 +199,46 @@ export function DailyLedger() {
     return { income, expenses, collected, netProfit };
   };
 
-  const stats = calculateMonthlyStats();
+  const stats = calculateStats();
+
+  const getChartData = () => {
+    const filteredForStats = ledgerEntries.filter(e => {
+      const entryDate = new Date(e.date);
+      return entryDate >= rangeStart && entryDate <= rangeEnd;
+    });
+
+    // Daily income/expense chart data
+    const dailyData = {};
+    filteredForStats.forEach(entry => {
+      if (!dailyData[entry.date]) {
+        dailyData[entry.date] = { date: entry.date, income: 0, expense: 0 };
+      }
+      if (entry.type === 'income') {
+        dailyData[entry.date].income += entry.amount;
+      } else {
+        dailyData[entry.date].expense += entry.amount;
+      }
+    });
+
+    const dailyChartData = Object.values(dailyData).sort((a, b) => a.date.localeCompare(b.date));
+
+    // Category breakdown data
+    const categoryData = {};
+    filteredForStats.forEach(entry => {
+      if (!categoryData[entry.category]) {
+        categoryData[entry.category] = { name: entry.category, value: 0 };
+      }
+      categoryData[entry.category].value += entry.amount;
+    });
+
+    const categoryChartData = Object.values(categoryData);
+
+    return { dailyChartData, categoryChartData };
+  };
+
+  const { dailyChartData, categoryChartData } = getChartData();
+
+  const COLORS = ['#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
   const getTypeColor = (type) => {
     return type === 'income' ? 'text-green-600' : 'text-red-600';
@@ -337,15 +412,68 @@ export function DailyLedger() {
             </button>
           </div>
 
-          {/* Month Filter */}
+          {/* Enhanced Date Filter */}
           <div className="bg-white rounded-lg border border-slate-200 p-4">
-            <label className="block text-sm font-medium text-slate-700 mb-2">Filter by Month</label>
-            <input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="w-full md:w-48 px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <label className="block text-sm font-medium text-slate-700 mb-3">Filter by Date</label>
+
+            {/* Filter Type Dropdown */}
+            <div className="flex flex-col gap-3 md:flex-row md:items-end md:gap-3">
+              <div>
+                <label className="block text-sm text-slate-600 mb-2">Select Filter Type:</label>
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="month">By Month</option>
+                  <option value="lastweek">Last Week</option>
+                  <option value="custom">Custom Range</option>
+                </select>
+              </div>
+
+              {/* Filter-specific Input */}
+              {filterType === 'month' && (
+                <div>
+                  <label className="block text-sm text-slate-600 mb-2">Select Month:</label>
+                  <input
+                    type="month"
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(e.target.value)}
+                    className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
+
+              {filterType === 'custom' && (
+                <>
+                  <div>
+                    <label className="block text-sm text-slate-600 mb-2">From Date:</label>
+                    <input
+                      type="date"
+                      value={fromDate}
+                      onChange={(e) => setFromDate(e.target.value)}
+                      className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="hidden md:block text-slate-500">To</div>
+                  <div>
+                    <label className="block text-sm text-slate-600 mb-2">To Date:</label>
+                    <input
+                      type="date"
+                      value={toDate}
+                      onChange={(e) => setToDate(e.target.value)}
+                      className="px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </>
+              )}
+
+              {filterType === 'lastweek' && (
+                <div className="text-sm text-slate-600">
+                Showing entries from the last 7 days
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Stats Cards */}
@@ -403,6 +531,109 @@ export function DailyLedger() {
                 )}
               </div>
             </div>
+          </div>
+
+          {/* Charts Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Daily Income vs Expenses Chart */}
+            <div className="bg-gradient-to-br from-white to-slate-50 rounded-lg border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow">
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold text-slate-900">Daily Income vs Expenses</h2>
+                <p className="text-sm text-slate-500 mt-1">Income and expense comparison</p>
+              </div>
+              {dailyChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={320}>
+                  <BarChart data={dailyChartData} margin={{ top: 20, right: 30, left: 0, bottom: 60 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis
+                      dataKey="date"
+                      angle={-45}
+                      textAnchor="end"
+                      height={80}
+                      tick={{ fill: '#64748b', fontSize: 12 }}
+                    />
+                    <YAxis tick={{ fill: '#64748b', fontSize: 12 }} />
+                    <Tooltip
+                      formatter={(value) => `₹${value.toLocaleString()}`}
+                      contentStyle={{
+                        backgroundColor: '#ffffff',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+                      }}
+                    />
+                    <Legend
+                      wrapperStyle={{ paddingTop: '20px' }}
+                      iconType="square"
+                    />
+                    <Bar dataKey="income" fill="#10b981" name="Income" radius={[8, 8, 0, 0]} />
+                    <Bar dataKey="expense" fill="#ef4444" name="Expense" radius={[8, 8, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center py-20">
+                  <p className="text-slate-500">No data available</p>
+                </div>
+              )}
+            </div>
+
+            {/* Category Breakdown Pie Chart */}
+            <div className="bg-gradient-to-br from-white to-slate-50 rounded-lg border border-slate-200 p-6 shadow-sm hover:shadow-md transition-shadow">
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold text-slate-900">Category Breakdown</h2>
+                <p className="text-sm text-slate-500 mt-1">Distribution by category</p>
+              </div>
+              {categoryChartData.length > 0 ? (
+                <div className="flex flex-col gap-4">
+                  <ResponsiveContainer width="100%" height={280}>
+                    <PieChart>
+                      <Pie
+                        data={categoryChartData}
+                        cx="35%"
+                        cy="50%"
+                        labelLine={false}
+                        outerRadius={75}
+                        innerRadius={35}
+                        fill="#8884d8"
+                        dataKey="value"
+                        paddingAngle={2}
+                      >
+                        {categoryChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value) => `₹${value.toLocaleString()}`}
+                        contentStyle={{
+                          backgroundColor: '#ffffff',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="grid grid-cols-2 gap-2">
+                    {categoryChartData.map((entry, index) => (
+                      <div key={entry.name} className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                        />
+                        <span className="text-sm text-slate-700">
+                          {entry.name}: <span className="font-semibold">₹{(entry.value / 1000).toFixed(1)}k</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center py-20">
+                  <p className="text-slate-500">No data available</p>
+                </div>
+              )}
+            </div>
+
           </div>
 
           {/* View Tabs and Search */}
