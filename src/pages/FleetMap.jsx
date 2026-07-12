@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Truck, Link2, Copy, Check, RefreshCw, AlertCircle, Trash2 } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import { tracking } from '../services/api';
-import { TruckIcon } from '../components/TruckIcon';
+// Same image as '3d Truck.png' (identical bytes); the space-free name is imported
+// to avoid path-escaping surprises on the Linux build.
+import truckPng from '../assets/truck-icon.png';
 
 const POLL_MS = 5000;
 const INDIA_CENTER = [22.9868, 72.6100];
@@ -24,22 +25,56 @@ const timeAgo = (iso) => {
   return `${Math.round(s / 3600)}h ago`;
 };
 
-// Reuse the dashboard's TruckIcon on the map. Leaflet's divIcon wants an HTML
-// string, so render the component to static markup rather than reimplementing
-// the SVG here — that keeps the two views from drifting apart.
-//
-// The SVG is drawn nose-right, so subtract 90° to align 0° course (north) with up.
+// The same 3D truck the dashboard uses. It's drawn in 3/4 perspective, so it is
+// deliberately NOT rotated — spinning a perspective render would read as the truck
+// tipping over. Heading is shown by a separate arrow orbiting the marker instead.
 const truckIcon = (status, course = 0, selected = false) => {
-  const size = selected ? 40 : 32;
+  const size = selected ? 52 : 42;
+  const ring = STATUS_COLOR[status] || STATUS_COLOR.offline;
+  const box = size + 16;                       // room for the ring and arrow
 
   return L.divIcon({
-    className: '',            // suppress Leaflet's default white square
-    iconSize: [size, size],
-    iconAnchor: [size / 2, size / 2],
-    popupAnchor: [0, -size / 2],
-    html: renderToStaticMarkup(
-      <TruckIcon status={status} isSelected={selected} rotation={(course || 0) - 90} />
-    ),
+    className: '',                             // suppress Leaflet's white square
+    iconSize: [box, box],
+    iconAnchor: [box / 2, box / 2],
+    popupAnchor: [0, -box / 2],
+    html: `
+      <div style="position:relative;width:${box}px;height:${box}px;">
+
+        <!-- status ring: sits behind the truck -->
+        <div style="
+          position:absolute;inset:6px;border-radius:50%;
+          background:${ring}22;border:2px solid ${ring};
+          ${status === 'moving' ? `box-shadow:0 0 0 4px ${ring}33;` : ''}
+        "></div>
+
+        <!-- heading arrow: orbits the ring, points where the vehicle is going -->
+        ${
+          status === 'moving'
+            ? `<div style="
+                 position:absolute;inset:0;
+                 transform:rotate(${course || 0}deg);
+               ">
+                 <div style="
+                   position:absolute;top:-1px;left:50%;margin-left:-4px;
+                   width:0;height:0;
+                   border-left:4px solid transparent;
+                   border-right:4px solid transparent;
+                   border-bottom:7px solid ${ring};
+                 "></div>
+               </div>`
+            : ''
+        }
+
+        <!-- the truck itself, always upright -->
+        <img src="${truckPng}" alt="" style="
+          position:absolute;top:50%;left:50%;
+          width:${size * 0.72}px;height:auto;
+          transform:translate(-50%,-50%);
+          filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))
+                 ${status === 'offline' ? ' grayscale(1) opacity(.55)' : ''};
+        "/>
+      </div>`,
   });
 };
 
