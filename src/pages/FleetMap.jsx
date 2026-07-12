@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { Truck, Link2, Copy, Check, RefreshCw, AlertCircle, Trash2 } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import { tracking } from '../services/api';
+import { TruckIcon } from '../components/TruckIcon';
 
 const POLL_MS = 5000;
 const INDIA_CENTER = [22.9868, 72.6100];
@@ -22,36 +24,22 @@ const timeAgo = (iso) => {
   return `${Math.round(s / 3600)}h ago`;
 };
 
-// A truck pin, rotated to the vehicle's heading. Built as a divIcon so it can be
-// coloured by status and rotated without shipping a sprite per state.
+// Reuse the dashboard's TruckIcon on the map. Leaflet's divIcon wants an HTML
+// string, so render the component to static markup rather than reimplementing
+// the SVG here — that keeps the two views from drifting apart.
+//
+// The SVG is drawn nose-right, so subtract 90° to align 0° course (north) with up.
 const truckIcon = (status, course = 0, selected = false) => {
-  const size = selected ? 42 : 34;
-  const color = STATUS_COLOR[status] || STATUS_COLOR.offline;
+  const size = selected ? 40 : 32;
 
   return L.divIcon({
-    className: '',           // suppress Leaflet's default white box
+    className: '',            // suppress Leaflet's default white square
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
     popupAnchor: [0, -size / 2],
-    html: `
-      <div style="
-        width:${size}px;height:${size}px;border-radius:50%;
-        background:${color};border:3px solid #fff;
-        box-shadow:0 2px 8px rgba(0,0,0,.35);
-        display:flex;align-items:center;justify-content:center;
-        transition:transform .3s ease;
-      ">
-        <svg xmlns="http://www.w3.org/2000/svg" width="${size * 0.55}" height="${size * 0.55}"
-             viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"
-             stroke-linecap="round" stroke-linejoin="round"
-             style="transform:rotate(${course}deg)">
-          <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/>
-          <path d="M15 18H9"/>
-          <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/>
-          <circle cx="17" cy="18" r="2"/>
-          <circle cx="7" cy="18" r="2"/>
-        </svg>
-      </div>`,
+    html: renderToStaticMarkup(
+      <TruckIcon status={status} isSelected={selected} rotation={(course || 0) - 90} />
+    ),
   });
 };
 
