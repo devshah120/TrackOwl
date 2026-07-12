@@ -59,6 +59,9 @@ export const auth = {
 export const tracking = {
   getDevices: () => apiCall('/track/devices'),
 
+  deleteDevice: (id) =>
+    apiCall(`/track/devices/${id}`, { method: 'DELETE' }),
+
   createShareLink: (deviceId, ttlMinutes = 120, label = '') =>
     apiCall('/track/tokens', {
       method: 'POST',

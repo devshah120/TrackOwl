@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from 'react-leaflet';
-import { Truck, Link2, Copy, Check, RefreshCw, AlertCircle } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import { Truck, Link2, Copy, Check, RefreshCw, AlertCircle, Trash2 } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import { tracking } from '../services/api';
 
@@ -21,7 +22,40 @@ const timeAgo = (iso) => {
   return `${Math.round(s / 3600)}h ago`;
 };
 
-// Recentre the map when the user picks a different vehicle.
+// A truck pin, rotated to the vehicle's heading. Built as a divIcon so it can be
+// coloured by status and rotated without shipping a sprite per state.
+const truckIcon = (status, course = 0, selected = false) => {
+  const size = selected ? 42 : 34;
+  const color = STATUS_COLOR[status] || STATUS_COLOR.offline;
+
+  return L.divIcon({
+    className: '',           // suppress Leaflet's default white box
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size / 2],
+    html: `
+      <div style="
+        width:${size}px;height:${size}px;border-radius:50%;
+        background:${color};border:3px solid #fff;
+        box-shadow:0 2px 8px rgba(0,0,0,.35);
+        display:flex;align-items:center;justify-content:center;
+        transition:transform .3s ease;
+      ">
+        <svg xmlns="http://www.w3.org/2000/svg" width="${size * 0.55}" height="${size * 0.55}"
+             viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2"
+             stroke-linecap="round" stroke-linejoin="round"
+             style="transform:rotate(${course}deg)">
+          <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/>
+          <path d="M15 18H9"/>
+          <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/>
+          <circle cx="17" cy="18" r="2"/>
+          <circle cx="7" cy="18" r="2"/>
+        </svg>
+      </div>`,
+  });
+};
+
+// Recentre when the user picks a different vehicle.
 function PanTo({ position }) {
   const map = useMap();
   useEffect(() => {
@@ -42,29 +76,25 @@ export function FleetMap() {
   const selectedRef = useRef(selectedId);
   selectedRef.current = selectedId;
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      try {
-        const data = await tracking.getDevices();
-        if (cancelled) return;
-        setDevices(data.devices || []);
-        setError(null);
-        // Auto-select the first device, but only before the user has chosen one.
-        if (!selectedRef.current && data.devices?.length) {
-          setSelectedId(data.devices[0].id || data.devices[0]._id);
-        }
-      } catch (err) {
-        if (!cancelled) setError(err.message || 'Could not reach the tracking API');
-      } finally {
-        if (!cancelled) setLoading(false);
+  const load = async () => {
+    try {
+      const data = await tracking.getDevices();
+      setDevices(data.devices || []);
+      setError(null);
+      if (!selectedRef.current && data.devices?.length) {
+        setSelectedId(data.devices[0].id || data.devices[0]._id);
       }
-    };
+    } catch (err) {
+      setError(err.message || 'Could not reach the tracking API');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     load();
     const timer = setInterval(load, POLL_MS);
-    return () => { cancelled = true; clearInterval(timer); };
+    return () => clearInterval(timer);
   }, []);
 
   const selected = useMemo(
@@ -75,6 +105,20 @@ export function FleetMap() {
   const selectedPos = selected?.lastPosition?.latitude
     ? [selected.lastPosition.latitude, selected.lastPosition.longitude]
     : null;
+
+  const removeDevice = async (device, event) => {
+    event.stopPropagation();   // don't also select the row we're deleting
+    const id = device.id || device._id;
+    if (!confirm(`Remove "${device.name}"? Its stored positions and share links go too.`)) return;
+
+    try {
+      await tracking.deleteDevice(id);
+      setDevices((prev) => prev.filter((d) => (d.id || d._id) !== id));
+      if (selectedId === id) setSelectedId(null);
+    } catch (err) {
+      setError(err.message || 'Could not delete device');
+    }
+  };
 
   const createLink = async () => {
     if (!selected) return;
@@ -102,8 +146,15 @@ export function FleetMap() {
     offline: devices.filter((d) => d.status === 'offline').length,
   };
 
+  const stats = selected && [
+    ['Speed', `${Math.round(selected.lastPosition?.speed || 0)} km/h`],
+    ['Ignition', selected.lastPosition?.ignition ? 'On' : 'Off'],
+    ['Status', selected.status],
+    ['Last fix', timeAgo(selected.lastSeenAt)],
+  ];
+
   return (
-    <div className="flex h-full flex-col gap-4 p-4 lg:flex-row">
+    <div className="flex h-[calc(100vh-8rem)] flex-col gap-4 p-4 lg:flex-row">
       {/* ---- vehicle list ------------------------------------------------- */}
       <aside className="flex w-full flex-col rounded-xl border border-slate-200 bg-white lg:w-80">
         <div className="border-b border-slate-200 p-4">
@@ -150,10 +201,10 @@ export function FleetMap() {
           {devices.map((d) => {
             const id = d.id || d._id;
             return (
-              <button
+              <div
                 key={id}
                 onClick={() => setSelectedId(id)}
-                className={`flex w-full items-center gap-3 border-b border-slate-100 p-4 text-left transition hover:bg-slate-50 ${
+                className={`group flex cursor-pointer items-center gap-3 border-b border-slate-100 p-4 transition hover:bg-slate-50 ${
                   id === selectedId ? 'bg-sky-50' : ''
                 }`}
               >
@@ -161,13 +212,20 @@ export function FleetMap() {
                   className="h-2.5 w-2.5 shrink-0 rounded-full"
                   style={{ background: STATUS_COLOR[d.status] }}
                 />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-slate-900">{d.name}</span>
-                  <span className="block text-xs text-slate-500">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium text-slate-900">{d.name}</p>
+                  <p className="text-xs text-slate-500">
                     {Math.round(d.lastPosition?.speed || 0)} km/h · {timeAgo(d.lastSeenAt)}
-                  </span>
-                </span>
-              </button>
+                  </p>
+                </div>
+                <button
+                  onClick={(e) => removeDevice(d, e)}
+                  title="Remove device"
+                  className="shrink-0 rounded p-1 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             );
           })}
         </div>
@@ -207,7 +265,9 @@ export function FleetMap() {
         )}
       </aside>
 
-      {/* ---- map ----------------------------------------------------------- */}
+      {/* ---- map ----------------------------------------------------------
+           The stat tiles float over the map rather than sitting under it, so
+           they never steal height from the map container. --------------------- */}
       <div className="relative min-h-[420px] flex-1 overflow-hidden rounded-xl border border-slate-200">
         <MapContainer
           center={selectedPos || INDIA_CENTER}
@@ -224,16 +284,10 @@ export function FleetMap() {
             if (!d.lastPosition?.latitude) return null;
             const id = d.id || d._id;
             return (
-              <CircleMarker
+              <Marker
                 key={id}
-                center={[d.lastPosition.latitude, d.lastPosition.longitude]}
-                radius={id === selectedId ? 11 : 8}
-                pathOptions={{
-                  color: '#fff',
-                  weight: 2,
-                  fillColor: STATUS_COLOR[d.status],
-                  fillOpacity: 1,
-                }}
+                position={[d.lastPosition.latitude, d.lastPosition.longitude]}
+                icon={truckIcon(d.status, d.lastPosition.course, id === selectedId)}
                 eventHandlers={{ click: () => setSelectedId(id) }}
               >
                 <Popup>
@@ -244,20 +298,18 @@ export function FleetMap() {
                   <br />
                   {timeAgo(d.lastSeenAt)}
                 </Popup>
-              </CircleMarker>
+              </Marker>
             );
           })}
         </MapContainer>
 
-        {selected && (
-          <div className="pointer-events-none absolute bottom-4 left-4 right-4 flex flex-wrap gap-2 lg:right-auto">
-            {[
-              ['Speed', `${Math.round(selected.lastPosition?.speed || 0)} km/h`],
-              ['Ignition', selected.lastPosition?.ignition ? 'On' : 'Off'],
-              ['Status', selected.status],
-              ['Last fix', timeAgo(selected.lastSeenAt)],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-lg bg-white/95 px-3 py-2 shadow-sm backdrop-blur">
+        {stats && (
+          <div className="pointer-events-none absolute bottom-4 left-1/2 z-[1000] flex -translate-x-1/2 gap-2 whitespace-nowrap">
+            {stats.map(([label, value]) => (
+              <div
+                key={label}
+                className="rounded-lg bg-white/95 px-3 py-2 shadow-md backdrop-blur-sm"
+              >
                 <p className="text-[10px] uppercase tracking-wide text-slate-400">{label}</p>
                 <p className="text-sm font-semibold capitalize text-slate-900">{value}</p>
               </div>
