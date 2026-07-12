@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, MapPin } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -13,6 +13,7 @@ export function Sidebar({ activeMenu, onMenuChange }) {
     { id: 'trips', label: 'Trips & Documents', icon: FileText },
     { id: 'ledger', label: 'Daily Ledger', icon: Calendar },
     { id: 'fleet', label: 'Fleet & Drivers', icon: Truck },
+    { id: 'tracking', label: 'Live Tracking', icon: MapPin },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
@@ -30,6 +31,8 @@ export function Sidebar({ activeMenu, onMenuChange }) {
       navigate('/daily-ledger');
     } else if (itemId === 'fleet') {
       navigate('/fleet-and-drivers');
+    } else if (itemId === 'tracking') {
+      navigate('/live-tracking');
     } else if (itemId === 'settings') {
       navigate('/settings');
     }

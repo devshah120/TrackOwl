@@ -54,6 +54,23 @@ export const auth = {
     }),
 };
 
+// Live tracking — devices fed by the Traccar gateway, and the short-lived
+// public share links handed to clients.
+export const tracking = {
+  getDevices: () => apiCall('/track/devices'),
+
+  createShareLink: (deviceId, ttlMinutes = 120, label = '') =>
+    apiCall('/track/tokens', {
+      method: 'POST',
+      body: JSON.stringify({ deviceId, ttlMinutes, label }),
+    }),
+
+  getShareLinks: () => apiCall('/track/tokens'),
+
+  revokeShareLink: (id) =>
+    apiCall(`/track/tokens/${id}`, { method: 'DELETE' }),
+};
+
 export const setAuthToken = (token) => {
   if (token) {
     localStorage.setItem('auth_token', token);

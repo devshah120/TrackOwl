@@ -20,6 +20,7 @@ import { AddNewTrip } from './pages/AddNewTrip';
 import { DailyLedger } from './pages/DailyLedger';
 import { AddLedgerEntry } from './pages/AddLedgerEntry';
 import { FleetAndDrivers } from './pages/FleetAndDrivers';
+import { FleetMap } from './pages/FleetMap';
 import { AddNewTruck } from './pages/AddNewTruck';
 import { SettingsPage } from './pages/Settings';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -89,6 +90,14 @@ function App() {
         element={
           <ProtectedRoute>
             <FleetAndDrivers />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/live-tracking"
+        element={
+          <ProtectedRoute>
+            <FleetMap />
           </ProtectedRoute>
         }
       />
