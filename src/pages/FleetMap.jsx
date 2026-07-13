@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Truck, Link2, Copy, Check, RefreshCw, AlertCircle, Trash2 } from 'lucide-react';
+import { Truck, Link2, Copy, Check, RefreshCw, AlertCircle, Trash2, Plus } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import { tracking } from '../services/api';
+import { AddDeviceModal } from '../components/AddDeviceModal';
 // Same image as '3d Truck.png' (identical bytes); the space-free name is imported
 // to avoid path-escaping surprises on the Linux build.
 import truckPng from '../assets/truck-icon.png';
@@ -94,6 +95,7 @@ export function FleetMap() {
   const [loading, setLoading] = useState(true);
   const [share, setShare] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   // Let the poller read the current selection without re-arming the interval.
   const selectedRef = useRef(selectedId);
@@ -181,10 +183,20 @@ export function FleetMap() {
       {/* ---- vehicle list ------------------------------------------------- */}
       <aside className="flex w-full flex-col rounded-xl border border-slate-200 bg-white lg:w-80">
         <div className="border-b border-slate-200 p-4">
-          <h2 className="flex items-center gap-2 font-semibold text-slate-900">
-            <Truck className="h-5 w-5 text-sky-600" />
-            Live Fleet
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="flex items-center gap-2 font-semibold text-slate-900">
+              <Truck className="h-5 w-5 text-sky-600" />
+              Live Fleet
+            </h2>
+            <button
+              onClick={() => setAdding(true)}
+              title="Add a vehicle"
+              className="flex items-center gap-1 rounded-lg bg-sky-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-sky-700"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add
+            </button>
+          </div>
           <div className="mt-3 flex gap-2 text-xs">
             <span className="rounded-full bg-green-50 px-2 py-1 font-medium text-green-700">
               {fleet.moving} moving
@@ -214,9 +226,10 @@ export function FleetMap() {
 
           {!loading && !error && devices.length === 0 && (
             <div className="p-4 text-sm text-slate-500">
-              <p className="font-medium text-slate-700">No devices reporting yet.</p>
+              <p className="font-medium text-slate-700">No vehicles yet.</p>
               <p className="mt-1">
-                Turn on the Traccar Client app and the vehicle will appear here within a few seconds.
+                Hit <strong>Add</strong> to register one. You'll get a Server URL and Device ID to
+                enter into the Traccar Client app on the driver's phone.
               </p>
             </div>
           )}
@@ -340,6 +353,13 @@ export function FleetMap() {
           </div>
         )}
       </div>
+
+      {adding && (
+        <AddDeviceModal
+          onClose={() => setAdding(false)}
+          onRegistered={load}          // pull the new vehicle straight into the list
+        />
+      )}
     </div>
   );
 }

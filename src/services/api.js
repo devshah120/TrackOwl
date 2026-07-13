@@ -59,6 +59,15 @@ export const auth = {
 export const tracking = {
   getDevices: () => apiCall('/track/devices'),
 
+  // Registers the vehicle in the Traccar gateway and claims it in one call.
+  // Resolves with { device, setup: { serverUrl, deviceIdentifier } } — the setup
+  // block is what the user types into the Traccar Client app.
+  registerDevice: (name, uniqueId) =>
+    apiCall('/track/devices', {
+      method: 'POST',
+      body: JSON.stringify(uniqueId ? { name, uniqueId } : { name }),
+    }),
+
   deleteDevice: (id) =>
     apiCall(`/track/devices/${id}`, { method: 'DELETE' }),
 
