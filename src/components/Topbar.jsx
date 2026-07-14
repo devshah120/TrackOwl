@@ -62,7 +62,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
   return (
     <>
       {/* Top Navigation Bar */}
-      <nav className="sticky top-0 bg-white border-b border-slate-200 shadow-sm z-40">
+      <nav className="sticky top-0 bg-white border-b border-slate-200 shadow-sm z-[2000]">
         <div className="px-6 py-4 flex items-center justify-between">
           {/* Left: Logo and Desktop Menu */}
           <div className="flex items-center gap-8">
@@ -127,7 +127,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
 
               {/* Notification Dropdown */}
               {isNotificationOpen && (
-                <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-slate-200 max-h-96 overflow-y-auto z-50">
+                <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-slate-200 max-h-96 overflow-y-auto z-[2100]">
                   <div className="p-4 border-b border-slate-200 flex justify-between items-center">
                     <h3 className="text-sm font-semibold text-slate-900">Notification</h3>
                     <a href="#" className="text-xs text-blue-600 hover:text-blue-700 font-medium">Mark all as read</a>
@@ -206,7 +206,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
 
               {/* User Dropdown Menu */}
               {isUserMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200">
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 z-[2100]">
                   <div className="p-3 border-b border-slate-200">
                     <p className="text-sm font-medium text-slate-900">{user?.name}</p>
                     <p className="text-xs text-slate-500">{user?.email}</p>
