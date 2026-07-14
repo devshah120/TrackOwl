@@ -65,7 +65,7 @@ export function AddDeviceModal({ onClose, onRegistered }) {
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Truck 02 — Ravi Kumar"
+                placeholder="Truck 02"
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
               />
             </div>
