@@ -175,7 +175,7 @@ export function FleetMap() {
     ['Speed', `${Math.round(selected.lastPosition?.speed || 0)} km/h`],
     ['Ignition', selected.lastPosition?.ignition ? 'On' : 'Off'],
     ['Status', selected.status],
-    ['Last fix', timeAgo(selected.lastSeenAt)],
+    ['Last seen', timeAgo(selected.lastSeenAt)],
   ];
 
   return (
