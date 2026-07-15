@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell } from 'lucide-react';
+import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route } from 'lucide-react';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -43,6 +43,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
     { id: 'trips', label: 'Trips & Documents', icon: FileText },
     { id: 'ledger', label: 'Daily Ledger', icon: Calendar },
     { id: 'fleet', label: 'Fleet & Drivers', icon: Truck },
+    { id: 'triproutes', label: 'Trip Routes', icon: Route },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
@@ -54,6 +55,8 @@ export function Topbar({ activeMenu, onMenuChange }) {
   const handleMenuClick = (itemId) => {
     if (itemId === 'trips') {
       navigate('/trips-and-documents');
+    } else if (itemId === 'triproutes') {
+      navigate('/trip-routes');
     } else {
       onMenuChange(itemId);
     }
