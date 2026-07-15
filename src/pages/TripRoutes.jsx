@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-
 import L from 'leaflet';
 import {
   Route as RouteIcon, MapPin, Flag, Plus, Trash2, RefreshCw, AlertCircle,
-  Link2, Copy, Check, Navigation, X, Clock, Loader2,
+  Link2, Copy, Check, Navigation, X, Clock, Loader2, CheckCircle2,
 } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import { trips as tripsApi, tracking, geo } from '../services/api';
@@ -24,6 +24,23 @@ const timeAgo = (iso) => {
   if (s < 3600) return `${Math.round(s / 60)}m ago`;
   return `${Math.round(s / 3600)}h ago`;
 };
+
+// Metres between two [lat, lng] points (haversine). Used to tell when the live
+// vehicle has reached the destination.
+const distanceMeters = (a, b) => {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(b[0] - a[0]);
+  const dLng = toRad(b[1] - a[1]);
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a[0])) * Math.cos(toRad(b[0])) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+};
+
+// The vehicle counts as "arrived" once it's within this many metres of the To
+// point. 200 m absorbs normal GPS drift without triggering early.
+const ARRIVAL_RADIUS_M = 200;
 
 // Short first segment of a place name ("Mumbai, Maharashtra, India" → "Mumbai").
 const shortPlace = (name = '') => name.split(',')[0].trim();
@@ -116,6 +133,10 @@ export function TripRoutes() {
   const selectedRef = useRef(selectedId);
   selectedRef.current = selectedId;
 
+  // Trip ids we've already fired an arrival update for, so we PATCH the server
+  // only once per arrival even though the check runs on every 5s poll.
+  const arrivedFiredRef = useRef(new Set());
+
   // Poll devices (for live vehicle position) and load trips.
   const load = async () => {
     try {
@@ -166,6 +187,46 @@ export function TripRoutes() {
     if (!routePoints) return livePos ? [livePos] : null;
     return livePos ? [...routePoints, livePos] : routePoints;
   }, [routePoints, livePos]);
+
+  // Arrival detection: on every poll, any still-running trip whose vehicle is
+  // within ARRIVAL_RADIUS_M of its destination flips to 'completed'. We update
+  // local state immediately (so the badge shows at once) and PATCH the server
+  // once, guarded by arrivedFiredRef so a slow request can't fire twice.
+  useEffect(() => {
+    if (!trips.length || !devices.length) return;
+
+    const arrived = [];
+    for (const t of trips) {
+      const id = t.id || t._id;
+      if (t.status === 'completed' || arrivedFiredRef.current.has(id)) continue;
+
+      const devId = String(t.device?._id || t.device?.id || t.device);
+      const dev = devices.find((d) => (d._id || d.id) === devId);
+      const pos = dev?.lastPosition;
+      if (!pos?.latitude) continue;
+
+      const d = distanceMeters(
+        [pos.latitude, pos.longitude],
+        [t.destination.lat, t.destination.lng]
+      );
+      if (d <= ARRIVAL_RADIUS_M) arrived.push(id);
+    }
+
+    if (!arrived.length) return;
+
+    arrived.forEach((id) => arrivedFiredRef.current.add(id));
+    setTrips((prev) =>
+      prev.map((t) =>
+        arrived.includes(t.id || t._id) ? { ...t, status: 'completed' } : t
+      )
+    );
+    arrived.forEach((id) => {
+      tripsApi.update(id, { status: 'completed' }).catch(() => {
+        // Roll back the guard so a failed PATCH can be retried next poll.
+        arrivedFiredRef.current.delete(id);
+      });
+    });
+  }, [trips, devices]);
 
   const removeTrip = async (trip, e) => {
     e.stopPropagation();
@@ -265,10 +326,17 @@ export function TripRoutes() {
                           <Navigation className="h-3.5 w-3.5 shrink-0 text-sky-500" />
                           <span className="truncate">{shortPlace(t.destination.name)}</span>
                         </p>
-                        <p className="mt-1 truncate text-xs text-slate-500">
-                          {t.device?.name || 'Vehicle'}
-                          {t.distanceKm ? ` · ${t.distanceKm} km` : ''}
-                          {t.durationMin ? ` · ~${Math.round(t.durationMin / 60 * 10) / 10} h` : ''}
+                        <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 truncate text-xs text-slate-500">
+                          <span>
+                            {t.device?.name || 'Vehicle'}
+                            {t.distanceKm ? ` · ${t.distanceKm} km` : ''}
+                            {t.durationMin ? ` · ~${Math.round(t.durationMin / 60 * 10) / 10} h` : ''}
+                          </span>
+                          {t.status === 'completed' && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700">
+                              <CheckCircle2 className="h-3 w-3" /> Arrived
+                            </span>
+                          )}
                         </p>
                       </div>
                       <button
@@ -351,21 +419,28 @@ export function TripRoutes() {
               )}
             </MapContainer>
 
-            {/* one-line From → To banner over the map */}
+            {/* one-line From → To banner over the map (or an arrival banner) */}
             {selected && (
               <div className="pointer-events-none absolute left-1/2 top-4 z-[1000] -translate-x-1/2">
-                <div className="flex items-center gap-2 rounded-full bg-white/95 px-4 py-2 text-sm shadow-md backdrop-blur-sm">
-                  <MapPin className="h-4 w-4 text-green-600" />
-                  <span className="font-medium text-slate-900">{shortPlace(selected.origin.name)}</span>
-                  <Navigation className="h-4 w-4 text-sky-500" />
-                  <Flag className="h-4 w-4 text-red-600" />
-                  <span className="font-medium text-slate-900">{shortPlace(selected.destination.name)}</span>
-                  {selected.distanceKm ? (
-                    <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                      {selected.distanceKm} km
-                    </span>
-                  ) : null}
-                </div>
+                {selected.status === 'completed' ? (
+                  <div className="flex items-center gap-2 rounded-full bg-green-600/95 px-4 py-2 text-sm text-white shadow-md backdrop-blur-sm">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span className="font-medium">Arrived at {shortPlace(selected.destination.name)}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 rounded-full bg-white/95 px-4 py-2 text-sm shadow-md backdrop-blur-sm">
+                    <MapPin className="h-4 w-4 text-green-600" />
+                    <span className="font-medium text-slate-900">{shortPlace(selected.origin.name)}</span>
+                    <Navigation className="h-4 w-4 text-sky-500" />
+                    <Flag className="h-4 w-4 text-red-600" />
+                    <span className="font-medium text-slate-900">{shortPlace(selected.destination.name)}</span>
+                    {selected.distanceKm ? (
+                      <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                        {selected.distanceKm} km
+                      </span>
+                    ) : null}
+                  </div>
+                )}
               </div>
             )}
           </div>
