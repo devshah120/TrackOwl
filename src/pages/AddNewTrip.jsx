@@ -3,6 +3,7 @@ import { ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, 
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
+import { Topbar } from '../components/Topbar';
 
 export function AddNewTrip() {
   const navigate = useNavigate();
@@ -206,135 +207,7 @@ export function AddNewTrip() {
 
   return (
     <div className="flex flex-col h-screen bg-slate-50">
-      {/* Top Navigation Bar */}
-      <nav className="sticky top-0 bg-white border-b border-slate-200 shadow-sm z-40">
-        <div className="px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <div className="flex-shrink-0">
-              <h1 className="text-2xl font-bold">
-                Track<span className="text-blue-600">Owl</span>
-              </h1>
-            </div>
-
-            <div className="hidden md:flex items-center gap-1">
-              {menuItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = item.id === 'trips';
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => handleMenuClick(item.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                      isActive
-                        ? 'bg-blue-50 text-blue-600 font-medium'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span className="text-sm">{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <button
-              onClick={toggleFullscreen}
-              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              title="Toggle fullscreen"
-            >
-              {isFullscreen ? (
-                <AiOutlineFullscreenExit className="w-5 h-5 text-slate-600" />
-              ) : (
-                <AiOutlineFullscreen className="w-5 h-5 text-slate-600" />
-              )}
-            </button>
-
-            <div className="relative">
-              <button className="relative p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                <Bell className="w-5 h-5 text-slate-600" />
-                {unreadCount > 0 && (
-                  <span className="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-            </div>
-
-            <div className="relative">
-              <button
-                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors"
-              >
-                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                  {user?.name?.charAt(0).toUpperCase() || 'U'}
-                </div>
-                <div className="hidden sm:block text-left">
-                  <p className="text-sm font-medium text-slate-900">{user?.name || 'User'}</p>
-                  <p className="text-xs text-slate-500">{user?.role || 'Client'}</p>
-                </div>
-                <ChevronDown className="w-4 h-4 text-slate-500" />
-              </button>
-
-              {isUserMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200">
-                  <div className="p-3 border-b border-slate-200">
-                    <p className="text-sm font-medium text-slate-900">{user?.name}</p>
-                    <p className="text-xs text-slate-500">{user?.email}</p>
-                    <p className="text-xs text-slate-500 mt-1">{user?.company}</p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      handleLogout();
-                      setIsUserMenuOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    Logout
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="md:hidden p-2 hover:bg-slate-100 rounded-lg transition-colors"
-            >
-              {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
-          </div>
-        </div>
-
-        {isMenuOpen && (
-          <div className="md:hidden border-t border-slate-200 bg-slate-50">
-            <div className="px-4 py-2 space-y-1">
-              {menuItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = item.id === 'trips';
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      handleMenuClick(item.id);
-                      setIsMenuOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
-                      isActive
-                        ? 'bg-blue-600 text-white'
-                        : 'text-slate-700 hover:bg-slate-200'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span className="text-sm font-medium">{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </nav>
+      <Topbar />
 
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">

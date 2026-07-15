@@ -1,71 +1,36 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Topbar } from '../components/Topbar';
 import { Dashboard } from './Dashboard';
-import { ComingSoon } from './ComingSoon';
-import { FleetMap } from './FleetMap';
-import { TripsAndDocuments } from './TripsAndDocuments';
+
+// The dashboard shell. Navigation now lives entirely in <Topbar />, which routes
+// every menu item to its own standalone page — so this layout only hosts the
+// Dashboard itself. Older /dashboard/* sub-paths (trips, fleet, ledger, settings)
+// are redirected to those standalone pages so stale URLs and bookmarks still land
+// on the real screen instead of this shell's placeholder.
+const LEGACY_REDIRECTS = {
+  'trips-and-documents': '/trips-and-documents',
+  fleet: '/live-tracking',        // "Fleet" used to render the live map here
+  'daily-ledger': '/daily-ledger',
+  settings: '/settings',
+};
 
 export function DashboardLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeMenu, setActiveMenu] = useState('dashboard');
 
   useEffect(() => {
-    const path = location.pathname.split('/').pop();
-    const pathToMenuMap = {
-      'dashboard': 'dashboard',
-      'trips-and-documents': 'trips',
-      'daily-ledger': 'ledger',
-      'fleet': 'fleet',
-      'settings': 'settings',
-    };
-    setActiveMenu(pathToMenuMap[path] || 'dashboard');
-  }, [location.pathname]);
-
-  const handleMenuChange = (menuId) => {
-    setActiveMenu(menuId);
-    // Ledger and Settings have real standalone pages; route to those rather than
-    // the /dashboard/* versions, which this layout only renders as "Coming soon"
-    // placeholders. (Fleet stays in-layout so it opens the live map.)
-    const standalone = {
-      ledger: '/daily-ledger',
-      settings: '/settings',
-    };
-    if (standalone[menuId]) {
-      navigate(standalone[menuId]);
-      return;
-    }
-    const menuToPathMap = {
-      dashboard: '/dashboard/dashboard',
-      trips: '/dashboard/trips-and-documents',
-      fleet: '/dashboard/fleet',
-    };
-    navigate(menuToPathMap[menuId]);
-  };
-
-  const renderPage = () => {
-    switch (activeMenu) {
-      case 'dashboard':
-        return <Dashboard />;
-      case 'trips':
-        return <TripsAndDocuments />;
-      case 'ledger':
-        return <ComingSoon title="Daily Ledger" />;
-      case 'fleet':
-        return <FleetMap />;
-      case 'settings':
-        return <ComingSoon title="Settings" />;
-      default:
-        return <Dashboard />;
-    }
-  };
+    const leaf = location.pathname.split('/').pop();
+    if (LEGACY_REDIRECTS[leaf]) navigate(LEGACY_REDIRECTS[leaf], { replace: true });
+  }, [location.pathname, navigate]);
 
   return (
     <div className="flex flex-col h-screen bg-slate-50">
-      <Topbar activeMenu={activeMenu} onMenuChange={handleMenuChange} />
+      <Topbar />
       <main className="flex-1 overflow-y-auto">
-        <div className="p-6 w-full">{renderPage()}</div>
+        <div className="p-6 w-full">
+          <Dashboard />
+        </div>
       </main>
     </div>
   );

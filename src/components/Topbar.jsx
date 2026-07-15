@@ -1,10 +1,31 @@
 import { useState } from 'react';
-import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route } from 'lucide-react';
+import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin } from 'lucide-react';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+// Canonical top navigation, shared by every page. This is the single source of
+// truth for what each menu item is and where it goes — pages must render <Topbar />
+// rather than hand-rolling their own <nav>, or the menus drift out of sync.
+//
+// `path` is the real standalone route each item opens. `match` lists the URL
+// fragments that should light the item as active (a page and its sub-pages, e.g.
+// the ledger and its add-entry screen).
+const NAV_ITEMS = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', match: ['dashboard'] },
+  { id: 'trips', label: 'Trips & Documents', icon: FileText, path: '/trips-and-documents', match: ['trips-and-documents', 'add-new-trip'] },
+  { id: 'ledger', label: 'Daily Ledger', icon: Calendar, path: '/daily-ledger', match: ['daily-ledger', 'add-ledger-entry'] },
+  { id: 'tracking', label: 'Live Tracking', icon: MapPin, path: '/live-tracking', match: ['live-tracking'] },
+  { id: 'fleet', label: 'Fleet Management', icon: Truck, path: '/fleet-and-drivers', match: ['fleet-and-drivers', 'add-new-truck'] },
+  { id: 'triproutes', label: 'Trip Routes', icon: Route, path: '/trip-routes', match: ['trip-routes'] },
+  { id: 'settings', label: 'Settings', icon: Settings, path: '/settings', match: ['settings'] },
+];
+
+// `activeMenu`/`onMenuChange` are optional legacy props (DashboardLayout still
+// passes them). When absent, the active item is derived from the URL and clicks
+// navigate directly — so any page can drop in <Topbar /> with no wiring.
 export function Topbar({ activeMenu, onMenuChange }) {
+  const location = useLocation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -38,43 +59,27 @@ export function Topbar({ activeMenu, onMenuChange }) {
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'trips', label: 'Trips & Documents', icon: FileText },
-    { id: 'ledger', label: 'Daily Ledger', icon: Calendar },
-    { id: 'fleet', label: 'Fleet & Drivers', icon: Truck },
-    { id: 'triproutes', label: 'Trip Routes', icon: Route },
-    { id: 'settings', label: 'Settings', icon: Settings },
-  ];
+  const menuItems = NAV_ITEMS;
+
+  // Which item is active: honour an explicit activeMenu prop if given, else infer
+  // from the current path via each item's `match` fragments.
+  const currentPath = location.pathname;
+  const derivedActive =
+    NAV_ITEMS.find((i) => i.match.some((m) => currentPath.includes(m)))?.id || 'dashboard';
+  const effectiveActive = activeMenu || derivedActive;
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  // Menu items that have a real standalone page route straight to it. Previously
-  // Daily Ledger and Settings fell through to onMenuChange, which navigates into
-  // DashboardLayout — and that layout renders a "Coming soon" placeholder for
-  // those two. So the same item showed the real page or the placeholder depending
-  // on where you clicked from. Routing them explicitly here removes that split.
-  //
-  // 'fleet' is deliberately NOT here: it stays on onMenuChange so "Fleet & Drivers"
-  // keeps opening the live tracking map (FleetMap) inside DashboardLayout, not the
-  // separate driver-management page at /fleet-and-drivers.
-  const menuPaths = {
-    trips: '/trips-and-documents',
-    ledger: '/daily-ledger',
-    triproutes: '/trip-routes',
-    settings: '/settings',
-  };
-
+  // Every item navigates to its canonical standalone route. onMenuChange, if the
+  // parent passed one, is still notified so layouts that track active state keep
+  // working — but routing no longer depends on it.
   const handleMenuClick = (itemId) => {
-    const path = menuPaths[itemId];
-    if (path) {
-      navigate(path);
-    } else {
-      onMenuChange(itemId);
-    }
+    const item = NAV_ITEMS.find((i) => i.id === itemId);
+    onMenuChange?.(itemId);
+    if (item) navigate(item.path);
   };
 
   return (
@@ -95,7 +100,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
             <div className="hidden md:flex items-center gap-1">
               {menuItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = activeMenu === item.id;
+                const isActive = effectiveActive === item.id;
                 return (
                   <button
                     key={item.id}
@@ -260,7 +265,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
             <div className="px-4 py-2 space-y-1">
               {menuItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = activeMenu === item.id;
+                const isActive = effectiveActive === item.id;
                 return (
                   <button
                     key={item.id}
