@@ -21,6 +21,7 @@ import { DailyLedger } from './pages/DailyLedger';
 import { AddLedgerEntry } from './pages/AddLedgerEntry';
 import { FleetAndDrivers } from './pages/FleetAndDrivers';
 import { FleetMap } from './pages/FleetMap';
+import { TripRoutes } from './pages/TripRoutes';
 import { AddNewTruck } from './pages/AddNewTruck';
 import { SettingsPage } from './pages/Settings';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -98,6 +99,14 @@ function App() {
         element={
           <ProtectedRoute>
             <FleetMap />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/trip-routes"
+        element={
+          <ProtectedRoute>
+            <TripRoutes />
           </ProtectedRoute>
         }
       />

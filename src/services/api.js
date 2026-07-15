@@ -85,6 +85,85 @@ export const tracking = {
     apiCall(`/track/tokens/${id}`, { method: 'DELETE' }),
 };
 
+// Trips — a planned journey (From → To) for a device, drawn as a road route on
+// the map alongside the live vehicle.
+export const trips = {
+  list: () => apiCall('/trips'),
+
+  // origin/destination are { name, lat, lng } from geo.searchPlaces; route is the
+  // OSRM result from geo.getRoute (may be null if routing was unavailable).
+  create: ({ deviceId, origin, destination, route, note = '' }) =>
+    apiCall('/trips', {
+      method: 'POST',
+      body: JSON.stringify({
+        deviceId,
+        origin,
+        destination,
+        note,
+        routePolyline: route?.polyline,
+        distanceKm: route?.distanceKm,
+        durationMin: route?.durationMin,
+      }),
+    }),
+
+  update: (id, patch) =>
+    apiCall(`/trips/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
+
+  remove: (id) => apiCall(`/trips/${id}`, { method: 'DELETE' }),
+};
+
+// Geo helpers backed by the free OSM ecosystem — same map data as the Leaflet
+// tiles, no API key, no billing. These call third-party services directly from
+// the browser (not through our API), so they're grouped separately.
+export const geo = {
+  // Place autocomplete via Nominatim. Returns [{ name, lat, lng }]. Nominatim
+  // asks callers to identify themselves; the browser sends a Referer, which
+  // satisfies its usage policy for light interactive use.
+  searchPlaces: async (query, { limit = 5, signal } = {}) => {
+    const q = query.trim();
+    if (q.length < 3) return [];
+    const url = new URL('https://nominatim.openstreetmap.org/search');
+    url.search = new URLSearchParams({
+      q,
+      format: 'json',
+      limit: String(limit),
+      addressdetails: '0',
+      countrycodes: 'in', // bias to India; drop this line to search worldwide
+    }).toString();
+
+    const res = await fetch(url, { signal, headers: { 'Accept-Language': 'en' } });
+    if (!res.ok) throw new Error('Place search failed');
+    const rows = await res.json();
+    return rows.map((r) => ({
+      name: r.display_name,
+      lat: Number(r.lat),
+      lng: Number(r.lon),
+    }));
+  },
+
+  // Road route between two { lat, lng } points via the public OSRM demo server.
+  // Returns { polyline: [[lat,lng],...], distanceKm, durationMin } or null.
+  getRoute: async (from, to, { signal } = {}) => {
+    const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`;
+    const url = `https://router.project-osrm.org/route/v1/driving/${coords}` +
+      `?overview=full&geometries=geojson`;
+    const res = await fetch(url, { signal });
+    if (!res.ok) throw new Error('Routing failed');
+    const data = await res.json();
+    const route = data.routes?.[0];
+    if (!route) return null;
+    return {
+      // GeoJSON is [lng, lat]; Leaflet wants [lat, lng].
+      polyline: route.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
+      distanceKm: Math.round((route.distance / 1000) * 10) / 10,
+      durationMin: Math.round(route.duration / 60),
+    };
+  },
+};
+
+// Public (no auth): the trip behind a share token, for the client map page.
+export const publicTrip = (token) => apiCall(`/trips/public/${token}`);
+
 export const setAuthToken = (token) => {
   if (token) {
     localStorage.setItem('auth_token', token);
