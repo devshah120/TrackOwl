@@ -60,12 +60,14 @@ export const tracking = {
   getDevices: () => apiCall('/track/devices'),
 
   // Registers the vehicle in the Traccar gateway and claims it in one call.
-  // Resolves with { device, setup: { serverUrl, deviceIdentifier } } — the setup
-  // block is what the user types into the Traccar Client app.
-  registerDevice: (name, uniqueId) =>
+  // type is 'phone' (Traccar Client app) or 'hardware' (Teltonika FMB920 etc.).
+  // Resolves with { device, setup } — for a phone, setup is
+  // { serverUrl, deviceIdentifier }; for hardware, { domain, port, protocol,
+  // deviceIdentifier } — i.e. exactly the fields to enter on each device.
+  registerDevice: (name, uniqueId, type = 'phone') =>
     apiCall('/track/devices', {
       method: 'POST',
-      body: JSON.stringify(uniqueId ? { name, uniqueId } : { name }),
+      body: JSON.stringify({ name, type, ...(uniqueId ? { uniqueId } : {}) }),
     }),
 
   deleteDevice: (id) =>
