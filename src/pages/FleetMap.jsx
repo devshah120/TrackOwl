@@ -5,6 +5,7 @@ import { Truck, Link2, Copy, Check, RefreshCw, AlertCircle, Trash2, Plus } from 
 import 'leaflet/dist/leaflet.css';
 import { tracking } from '../services/api';
 import { AddDeviceModal } from '../components/AddDeviceModal';
+import { Topbar } from '../components/Topbar';
 // Same image as '3d Truck.png' (identical bytes); the space-free name is imported
 // to avoid path-escaping surprises on the Linux build.
 import truckPng from '../assets/truck-icon.png';
@@ -179,7 +180,9 @@ export function FleetMap() {
   ];
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col gap-4 p-4 lg:flex-row">
+    <div className="flex h-screen flex-col bg-slate-50">
+      <Topbar />
+      <div className="flex flex-1 flex-col gap-4 overflow-hidden p-4 lg:flex-row">
       {/* ---- vehicle list ------------------------------------------------- */}
       <aside className="flex w-full flex-col rounded-xl border border-slate-200 bg-white lg:w-80">
         <div className="border-b border-slate-200 p-4">
@@ -354,12 +357,13 @@ export function FleetMap() {
         )}
       </div>
 
-      {adding && (
-        <AddDeviceModal
-          onClose={() => setAdding(false)}
-          onRegistered={load}          // pull the new vehicle straight into the list
-        />
-      )}
+        {adding && (
+          <AddDeviceModal
+            onClose={() => setAdding(false)}
+            onRegistered={load}          // pull the new vehicle straight into the list
+          />
+        )}
+      </div>
     </div>
   );
 }
