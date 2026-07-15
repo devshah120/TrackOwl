@@ -81,6 +81,27 @@ function FitBounds({ points }) {
   return null;
 }
 
+// Leaflet measures its container once, at mount. Inside this flex layout the
+// container often isn't at full width yet, so only a narrow strip of tiles loads.
+// Force a re-measure after the first paint, and again whenever the window
+// resizes, so the map always fills its box.
+function InvalidateSize() {
+  const map = useMap();
+  useEffect(() => {
+    const fix = () => map.invalidateSize();
+    // A double rAF lets the flex layout settle before we re-measure.
+    const raf = requestAnimationFrame(() => requestAnimationFrame(fix));
+    const t = setTimeout(fix, 300);
+    window.addEventListener('resize', fix);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
+      window.removeEventListener('resize', fix);
+    };
+  }, [map]);
+  return null;
+}
+
 export function TripRoutes() {
   const navigate = useNavigate();
   const [devices, setDevices] = useState([]);
@@ -302,6 +323,7 @@ export function TripRoutes() {
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                 attribution="&copy; OpenStreetMap contributors"
               />
+              <InvalidateSize />
               <FitBounds points={framePoints} />
 
               {selected && routePoints && (
