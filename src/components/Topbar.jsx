@@ -52,11 +52,26 @@ export function Topbar({ activeMenu, onMenuChange }) {
     navigate('/login');
   };
 
+  // Menu items that have a real standalone page route straight to it. Previously
+  // Daily Ledger and Settings fell through to onMenuChange, which navigates into
+  // DashboardLayout — and that layout renders a "Coming soon" placeholder for
+  // those two. So the same item showed the real page or the placeholder depending
+  // on where you clicked from. Routing them explicitly here removes that split.
+  //
+  // 'fleet' is deliberately NOT here: it stays on onMenuChange so "Fleet & Drivers"
+  // keeps opening the live tracking map (FleetMap) inside DashboardLayout, not the
+  // separate driver-management page at /fleet-and-drivers.
+  const menuPaths = {
+    trips: '/trips-and-documents',
+    ledger: '/daily-ledger',
+    triproutes: '/trip-routes',
+    settings: '/settings',
+  };
+
   const handleMenuClick = (itemId) => {
-    if (itemId === 'trips') {
-      navigate('/trips-and-documents');
-    } else if (itemId === 'triproutes') {
-      navigate('/trip-routes');
+    const path = menuPaths[itemId];
+    if (path) {
+      navigate(path);
     } else {
       onMenuChange(itemId);
     }

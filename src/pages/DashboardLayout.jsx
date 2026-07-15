@@ -25,12 +25,21 @@ export function DashboardLayout() {
 
   const handleMenuChange = (menuId) => {
     setActiveMenu(menuId);
+    // Ledger and Settings have real standalone pages; route to those rather than
+    // the /dashboard/* versions, which this layout only renders as "Coming soon"
+    // placeholders. (Fleet stays in-layout so it opens the live map.)
+    const standalone = {
+      ledger: '/daily-ledger',
+      settings: '/settings',
+    };
+    if (standalone[menuId]) {
+      navigate(standalone[menuId]);
+      return;
+    }
     const menuToPathMap = {
       dashboard: '/dashboard/dashboard',
       trips: '/dashboard/trips-and-documents',
-      ledger: '/dashboard/daily-ledger',
       fleet: '/dashboard/fleet',
-      settings: '/dashboard/settings',
     };
     navigate(menuToPathMap[menuId]);
   };
