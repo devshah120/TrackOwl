@@ -1,9 +1,17 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, Truck, AlertCircle, Check } from 'lucide-react';
 import { FleetMapWidget } from '../components/FleetMapWidget';
-import { fleet, ledger, billing } from '../services/api';
+import { fleet, ledger, billing, tracking } from '../services/api';
 
-const STATUS_DISPLAY = { Running: 'moving', Idle: 'idle', Stopped: 'stopped' };
+const DEVICE_POLL_MS = 5000;
+
+const timeAgo = (iso) => {
+  if (!iso) return 'never';
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.round(s / 60)}m ago`;
+  return `${Math.round(s / 3600)}h ago`;
+};
 
 export function Dashboard() {
   const [selectedTruck, setSelectedTruck] = useState('');
@@ -12,6 +20,7 @@ export function Dashboard() {
   const [trucksData, setTrucksData] = useState([]);
   const [ledgerData, setLedgerData] = useState([]);
   const [billingData, setBillingData] = useState([]);
+  const [devices, setDevices] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -26,9 +35,6 @@ export function Dashboard() {
         setTrucksData(fleetRes.trucks);
         setLedgerData(ledgerRes.entries);
         setBillingData(billingRes.billingTrips);
-        if (fleetRes.trucks.length > 0) {
-          setSelectedTruck(fleetRes.trucks[0]._id || fleetRes.trucks[0].id);
-        }
       } catch (err) {
         if (!cancelled) setError(err.message || 'Failed to load dashboard data');
       } finally {
@@ -36,6 +42,27 @@ export function Dashboard() {
       }
     })();
     return () => { cancelled = true; };
+  }, []);
+
+  // Live vehicle positions — the same feed Live Tracking shows, polled the same way.
+  useEffect(() => {
+    let cancelled = false;
+    const loadDevices = async () => {
+      try {
+        const res = await tracking.getDevices();
+        if (cancelled) return;
+        setDevices(res.devices || []);
+        setSelectedTruck((prev) => prev || res.devices?.[0]?.id || res.devices?.[0]?._id || '');
+      } catch {
+        // Fleet Summary just stays empty; the main error banner covers fleet/ledger/billing failures.
+      }
+    };
+    loadDevices();
+    const timer = setInterval(loadDevices, DEVICE_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
   }, []);
 
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -82,12 +109,14 @@ export function Dashboard() {
     },
   ];
 
-  const trucks = trucksData.map((t) => ({
-    id: t._id || t.id,
-    name: t.model,
-    status: STATUS_DISPLAY[t.status] || 'idle',
-    location: t.currentRoute || '—',
-    driver: t.driver?.name || '—',
+  // Same live devices Live Tracking shows, so the dashboard summary and the
+  // full map never disagree about which vehicles exist or where they are.
+  const trucks = devices.map((d) => ({
+    id: d.id || d._id,
+    name: d.name,
+    status: d.status,
+    location: d.lastPosition?.latitude ? `${Math.round(d.lastPosition.speed || 0)} km/h` : 'No position yet',
+    driver: timeAgo(d.lastSeenAt),
   }));
 
   const recentTrips = [...billingData]
@@ -197,8 +226,7 @@ export function Dashboard() {
               >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
-                    <p className="text-sm font-semibold text-slate-900">{truck.id}</p>
-                    <p className="text-xs text-slate-600 mt-1">{truck.name}</p>
+                    <p className="text-sm font-semibold text-slate-900">{truck.name}</p>
                     <p className="text-xs text-slate-500 mt-1">{truck.driver}</p>
                   </div>
                   <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(truck.status)}`}>

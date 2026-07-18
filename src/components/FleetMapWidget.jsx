@@ -1,223 +1,168 @@
-import { useState, useEffect } from 'react';
-import { MapPin, Navigation, AlertCircle, Wifi, WifiOff, Loader } from 'lucide-react';
-import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from '@react-google-maps/api';
-import truckIcon from '../assets/truck-icon.png';
+import { useEffect, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import L from 'leaflet';
+import { Loader } from 'lucide-react';
+import 'leaflet/dist/leaflet.css';
+import { tracking } from '../services/api';
+import truckPng from '../assets/truck-icon.png';
 
-const mapContainerStyle = {
-  width: '100%',
-  height: '100%',
+const POLL_MS = 5000;
+const INDIA_CENTER = [22.9868, 72.6100];
+
+const STATUS_COLOR = {
+  moving: '#22c55e',
+  idle: '#f59e0b',
+  offline: '#64748b',
 };
 
-const defaultCenter = {
-  lat: 20.5937,
-  lng: 78.9629,
-};
+// Same marker as the Live Tracking page (FleetMap.jsx), reused here so the
+// dashboard widget and the full map read as the same fleet, not two datasets.
+const truckIcon = (status, course = 0, selected = false) => {
+  const size = selected ? 52 : 42;
+  const ring = STATUS_COLOR[status] || STATUS_COLOR.offline;
+  const box = size + 16;
 
-export function FleetMapWidget({ height = '500px', selectedTruck: propSelectedTruck = 'TRK-001', onSelectTruck }) {
-  const [selectedTruck, setSelectedTruck] = useState('TRK-001');
-  const [infoWindowOpen, setInfoWindowOpen] = useState('TRK-001');
-
-  const activeSelectedTruck = propSelectedTruck || selectedTruck;
-
-  const handleSelectTruck = (truckId) => {
-    setSelectedTruck(truckId);
-    setInfoWindowOpen(truckId);
-    if (onSelectTruck) {
-      onSelectTruck(truckId);
-    }
-  };
-  const [trucks, setTrucks] = useState([
-    {
-      id: 'TRK-001',
-      name: 'Ashok Leyland 16ft',
-      status: 'moving',
-      lat: 23.0225,
-      lng: 72.5714,
-      speed: 65,
-      direction: 45,
-      location: 'Ahmedabad',
-      lastUpdate: '2 mins ago',
-      driver: 'Rajesh Kumar',
-      route: 'Ahmedabad Route',
-    },
-    {
-      id: 'TRK-002',
-      name: 'Tata 18ft',
-      status: 'idle',
-      lat: 28.5244,
-      lng: 77.1855,
-      speed: 0,
-      direction: 0,
-      location: 'Jaipur Warehouse',
-      lastUpdate: '5 mins ago',
-      driver: 'Amit Singh',
-      route: 'Awaiting Load',
-    },
-    {
-      id: 'TRK-003',
-      name: 'Mahindra 20ft',
-      status: 'moving',
-      lat: 12.9716,
-      lng: 77.5946,
-      speed: 72,
-      direction: 120,
-      location: 'Bangalore-Chennai Route',
-      lastUpdate: '1 min ago',
-      driver: 'Priya Sharma',
-      route: 'Bangalore → Chennai',
-    },
-    {
-      id: 'TRK-004',
-      name: 'Hino 10ft',
-      status: 'stopped',
-      lat: 18.5204,
-      lng: 73.8567,
-      speed: 0,
-      direction: 180,
-      location: 'Pune Rest Stop',
-      lastUpdate: '15 mins ago',
-      driver: 'Vikram Patel',
-      route: 'Pune-Nashik Highway',
-    },
-    {
-      id: 'TRK-005',
-      name: 'Volvo FH16',
-      status: 'offline',
-      lat: 19.0760,
-      lng: 72.8777,
-      speed: 0,
-      direction: 270,
-      location: 'Mumbai Depot',
-      lastUpdate: '2 hours ago',
-      driver: 'Manish Verma',
-      route: 'Offline',
-    },
-  ]);
-
-  const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-
-  const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: apiKey,
+  return L.divIcon({
+    className: '',
+    iconSize: [box, box],
+    iconAnchor: [box / 2, box / 2],
+    popupAnchor: [0, -box / 2],
+    html: `
+      <div style="position:relative;width:${box}px;height:${box}px;">
+        <div style="
+          position:absolute;inset:6px;border-radius:50%;
+          background:${ring}22;border:2px solid ${ring};
+          ${status === 'moving' ? `box-shadow:0 0 0 4px ${ring}33;` : ''}
+        "></div>
+        ${
+          status === 'moving'
+            ? `<div style="
+                 position:absolute;inset:0;
+                 transform:rotate(${course || 0}deg);
+               ">
+                 <div style="
+                   position:absolute;top:-1px;left:50%;margin-left:-4px;
+                   width:0;height:0;
+                   border-left:4px solid transparent;
+                   border-right:4px solid transparent;
+                   border-bottom:7px solid ${ring};
+                 "></div>
+               </div>`
+            : ''
+        }
+        <img src="${truckPng}" alt="" style="
+          position:absolute;top:50%;left:50%;
+          width:${size * 0.72}px;height:auto;
+          transform:translate(-50%,-50%);
+          filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))
+                 ${status === 'offline' ? ' grayscale(1) opacity(.55)' : ''};
+        "/>
+      </div>`,
   });
+};
 
-  const selectedTruckData = trucks.find(t => t.id === activeSelectedTruck);
-
-  // Simulate truck movement
+function PanTo({ position }) {
+  const map = useMap();
   useEffect(() => {
-    const interval = setInterval(() => {
-      setTrucks(prevTrucks =>
-        prevTrucks.map(truck => {
-          if (truck.status === 'moving') {
-            const latChange = (Math.random() - 0.5) * 0.005;
-            const lngChange = (Math.random() - 0.5) * 0.005;
-            const newDirection = (truck.direction + Math.random() * 10 - 5) % 360;
-            return {
-              ...truck,
-              lat: truck.lat + latChange,
-              lng: truck.lng + lngChange,
-              direction: newDirection < 0 ? newDirection + 360 : newDirection,
-            };
-          }
-          return truck;
-        })
-      );
-    }, 2000);
+    if (position) map.flyTo(position, Math.max(map.getZoom(), 15), { duration: 0.8 });
+  }, [position, map]);
+  return null;
+}
 
-    return () => clearInterval(interval);
+export function FleetMapWidget({ height = '500px', selectedTruck, onSelectTruck }) {
+  const [devices, setDevices] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const data = await tracking.getDevices();
+        if (cancelled) return;
+        setDevices(data.devices || []);
+        setError(null);
+        if (!selectedTruck && data.devices?.length && onSelectTruck) {
+          onSelectTruck(data.devices[0].id || data.devices[0]._id);
+        }
+      } catch (err) {
+        if (!cancelled) setError(err.message || 'Could not reach the tracking API');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    load();
+    const timer = setInterval(load, POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'moving':
-        return 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'idle':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'stopped':
-        return 'bg-red-100 text-red-800 border-red-300';
-      case 'offline':
-        return 'bg-gray-100 text-gray-800 border-gray-300';
-      default:
-        return 'bg-slate-100 text-slate-800 border-slate-300';
-    }
-  };
+  const selected = devices.find((d) => (d.id || d._id) === selectedTruck) || null;
+  const selectedPos = selected?.lastPosition?.latitude
+    ? [selected.lastPosition.latitude, selected.lastPosition.longitude]
+    : null;
 
-  if (!isLoaded) {
+  if (loading) {
     return (
       <div className="bg-white rounded-lg shadow-lg border border-slate-200 overflow-hidden" style={{ height }}>
         <div className="w-full h-full flex items-center justify-center">
           <div className="text-center">
             <Loader className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-3" />
-            <p className="text-slate-600">Loading Map...</p>
+            <p className="text-slate-600">Loading map...</p>
           </div>
         </div>
       </div>
     );
   }
 
+  if (error) {
+    return (
+      <div className="bg-white rounded-lg shadow-lg border border-slate-200 overflow-hidden flex items-center justify-center" style={{ height }}>
+        <p className="text-sm text-red-600 px-4 text-center">{error}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-lg border border-slate-200 overflow-hidden" style={{ height }}>
-      <GoogleMap
-        mapContainerStyle={{ ...mapContainerStyle, height: '100%' }}
-        center={selectedTruckData ? { lat: selectedTruckData.lat, lng: selectedTruckData.lng } : defaultCenter}
-        zoom={selectedTruckData ? 10 : 6}
-        options={{
-          styles: [
-            {
-              featureType: 'all',
-              elementType: 'labels.text.fill',
-              stylers: [{ color: '#64748b' }],
-            },
-            {
-              featureType: 'water',
-              elementType: 'geometry.fill',
-              stylers: [{ color: '#e0f2fe' }],
-            },
-            {
-              featureType: 'road',
-              elementType: 'geometry.fill',
-              stylers: [{ color: '#f3f4f6' }],
-            },
-          ],
-        }}
-      >
-        {/* Truck Markers */}
-        {trucks.map((truck) => (
-          <MarkerF
-            key={truck.id}
-            position={{ lat: truck.lat, lng: truck.lng }}
-            onClick={() => {
-              handleSelectTruck(truck.id);
-            }}
-            icon={{
-              url: truckIcon,
-              scaledSize: truck.status === 'moving' ? { width: 48, height: 48 } : { width: 44, height: 44 },
-              anchor: new window.google.maps.Point(24, 24),
-            }}
-          >
-            {activeSelectedTruck === truck.id && infoWindowOpen === truck.id ? (
-              <InfoWindowF
-                onCloseClick={() => setInfoWindowOpen(null)}
-                position={{ lat: truck.lat, lng: truck.lng }}
-              >
-                <div className="bg-white rounded shadow p-3 max-w-xs">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-semibold text-slate-900 text-sm">{truck.name}</h3>
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(truck.status)}`}>
-                      {truck.status.charAt(0).toUpperCase() + truck.status.slice(1)}
-                    </span>
-                  </div>
-                  <div className="text-xs text-slate-600 space-y-1">
-                    <p><strong>ID:</strong> {truck.id}</p>
-                    <p><strong>Driver:</strong> {truck.driver}</p>
-                    <p><strong>Speed:</strong> {truck.speed} km/h</p>
-                    <p><strong>Route:</strong> {truck.route}</p>
-                  </div>
-                </div>
-              </InfoWindowF>
-            ) : null}
-          </MarkerF>
-        ))}
-      </GoogleMap>
+      <MapContainer center={selectedPos || INDIA_CENTER} zoom={selectedPos ? 15 : 6} className="h-full w-full">
+        <TileLayer
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution="&copy; OpenStreetMap contributors"
+        />
+        <PanTo position={selectedPos} />
+
+        {devices.map((d) => {
+          if (!d.lastPosition?.latitude) return null;
+          const id = d.id || d._id;
+          return (
+            <Marker
+              key={id}
+              position={[d.lastPosition.latitude, d.lastPosition.longitude]}
+              icon={truckIcon(d.status, d.lastPosition.course, id === selectedTruck)}
+              eventHandlers={{ click: () => onSelectTruck?.(id) }}
+            >
+              <Popup>
+                <strong>{d.name}</strong>
+                <br />
+                {Math.round(d.lastPosition.speed || 0)} km/h ·{' '}
+                {d.lastPosition.ignition ? 'ignition on' : 'ignition off'}
+              </Popup>
+            </Marker>
+          );
+        })}
+
+        {devices.length === 0 && (
+          <div className="absolute inset-0 z-[1000] flex items-center justify-center pointer-events-none">
+            <p className="bg-white/90 rounded-lg px-4 py-2 text-sm text-slate-500 shadow">
+              No vehicles yet — add one from Live Tracking.
+            </p>
+          </div>
+        )}
+      </MapContainer>
     </div>
   );
 }
