@@ -1,15 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronDown, LogOut, Menu, X, Bell, ArrowLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LayoutDashboard, FileText, Calendar, Truck, Settings } from 'lucide-react';
 import { Topbar } from '../components/Topbar';
+import { fleet } from '../services/api';
 
 export function AddNewTruck() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const isEditing = Boolean(id);
   const { user, logout } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     truckNumber: '',
     model: '',
@@ -21,6 +26,32 @@ export function AddNewTruck() {
     registrationDate: '',
     insuranceExpiry: '',
   });
+
+  useEffect(() => {
+    if (!isEditing) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fleet.list();
+        const truck = res.trucks.find((t) => (t._id || t.id) === id);
+        if (!truck || cancelled) return;
+        setFormData({
+          truckNumber: truck.number || '',
+          model: truck.model || '',
+          driverName: truck.driver?.name || '',
+          mobileNumber: truck.driver?.mobile || '',
+          licenseNumber: truck.driver?.licenseNumber || '',
+          licenseExpiry: truck.driver?.licenseExpiry ? truck.driver.licenseExpiry.slice(0, 10) : '',
+          monthlySalary: truck.driver?.salary ?? '',
+          registrationDate: truck.registrationDate ? truck.registrationDate.slice(0, 10) : '',
+          insuranceExpiry: truck.insuranceExpiry ? truck.insuranceExpiry.slice(0, 10) : '',
+        });
+      } catch (err) {
+        if (!cancelled) setError(err.message || 'Failed to load truck');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id, isEditing]);
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -61,10 +92,35 @@ export function AddNewTruck() {
     navigate('/fleet-and-drivers');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // TODO: Submit form data to backend
-    navigate('/fleet-and-drivers');
+    setError('');
+    setSubmitting(true);
+    try {
+      const payload = {
+        number: formData.truckNumber,
+        model: formData.model,
+        registrationDate: formData.registrationDate || undefined,
+        insuranceExpiry: formData.insuranceExpiry || undefined,
+        driver: {
+          name: formData.driverName,
+          mobile: formData.mobileNumber,
+          licenseNumber: formData.licenseNumber,
+          licenseExpiry: formData.licenseExpiry || undefined,
+          salary: formData.monthlySalary === '' ? undefined : Number(formData.monthlySalary),
+        },
+      };
+      if (isEditing) {
+        await fleet.update(id, payload);
+      } else {
+        await fleet.create(payload);
+      }
+      navigate('/fleet-and-drivers');
+    } catch (err) {
+      setError(err.message || 'Failed to save truck');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -83,10 +139,18 @@ export function AddNewTruck() {
               <ArrowLeft className="w-5 h-5 text-slate-600" />
             </button>
             <div>
-              <h1 className="text-3xl font-bold text-slate-900">Add New Truck</h1>
-              <p className="text-slate-600 mt-1">Register a new truck and assign a driver</p>
+              <h1 className="text-3xl font-bold text-slate-900">{isEditing ? 'Edit Truck' : 'Add New Truck'}</h1>
+              <p className="text-slate-600 mt-1">
+                {isEditing ? 'Update truck and driver details' : 'Register a new truck and assign a driver'}
+              </p>
             </div>
           </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+              {error}
+            </div>
+          )}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -218,9 +282,10 @@ export function AddNewTruck() {
               </button>
               <button
                 type="submit"
-                className="flex-1 px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                disabled={submitting}
+                className="flex-1 px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
               >
-                Add Truck
+                {submitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Add Truck'}
               </button>
             </div>
           </form>

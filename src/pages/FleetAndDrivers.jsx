@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Search, Edit2, Trash2, Filter, ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell, Phone, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { Topbar } from '../components/Topbar';
+import { fleet } from '../services/api';
 
 export function FleetAndDrivers() {
   const navigate = useNavigate();
@@ -62,78 +63,29 @@ export function FleetAndDrivers() {
     }
   };
 
-  // Sample trucks data
-  const [trucks, setTrucks] = useState([
-    {
-      id: 'TR001',
-      number: 'MH-01-AB-1234',
-      model: 'Tata 407',
-      registrationDate: '2020-03-15',
-      insuranceExpiry: '2026-09-15',
-      status: 'Running',
-      currentRoute: 'Mumbai → Bangalore',
-      driver: {
-        id: 'DRV001',
-        name: 'Rajesh Kumar',
-        mobile: '9876543210',
-        salary: 15000,
-        licenseExpiry: '2027-06-30',
-      },
-    },
-    {
-      id: 'TR002',
-      number: 'MH-01-CD-5678',
-      model: 'Ashok Leyland 3318',
-      registrationDate: '2019-07-22',
-      insuranceExpiry: '2026-05-20',
-      status: 'Idle',
-      currentRoute: 'Pune → Hyderabad',
-      driver: {
-        id: 'DRV002',
-        name: 'Priya Singh',
-        mobile: '9876543211',
-        salary: 14500,
-        licenseExpiry: '2026-12-15',
-      },
-    },
-    {
-      id: 'TR003',
-      number: 'MH-01-EF-9012',
-      model: 'Mahindra Bolero Pik-Up',
-      registrationDate: '2021-11-08',
-      insuranceExpiry: '2027-02-28',
-      status: 'Running',
-      currentRoute: 'Delhi → Chandigarh',
-      driver: {
-        id: 'DRV003',
-        name: 'Amit Patel',
-        mobile: '9876543212',
-        salary: 13500,
-        licenseExpiry: '2028-03-10',
-      },
-    },
-    {
-      id: 'TR004',
-      number: 'MH-01-GH-3456',
-      model: 'Tata 709',
-      registrationDate: '2018-02-14',
-      insuranceExpiry: '2025-08-10',
-      status: 'Stopped',
-      currentRoute: 'Maintenance',
-      driver: {
-        id: 'DRV004',
-        name: 'Vikram Sharma',
-        mobile: '9876543213',
-        salary: 15500,
-        licenseExpiry: '2026-09-05',
-      },
-    },
-  ]);
+  const [trucks, setTrucks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fleet.list();
+        if (!cancelled) setTrucks(res.trucks);
+      } catch (err) {
+        if (!cancelled) setError(err.message || 'Failed to load trucks');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const filteredTrucks = trucks.filter((truck) => {
     const matchesSearch =
       truck.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      truck.driver.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (truck.driver?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       truck.model.toLowerCase().includes(searchQuery.toLowerCase());
 
     if (filterStatus === 'all') return matchesSearch;
@@ -179,8 +131,13 @@ export function FleetAndDrivers() {
     return expiry < today;
   };
 
-  const handleDeleteTruck = (id) => {
-    setTrucks(trucks.filter((truck) => truck.id !== id));
+  const handleDeleteTruck = async (id) => {
+    try {
+      await fleet.remove(id);
+      setTrucks((prev) => prev.filter((truck) => (truck._id || truck.id) !== id));
+    } catch (err) {
+      setError(err.message || 'Failed to delete truck');
+    }
   };
 
   return (
@@ -259,8 +216,17 @@ export function FleetAndDrivers() {
             </button>
           </div>
 
+          {loading && (
+            <div className="text-center py-12 text-slate-500">Loading trucks...</div>
+          )}
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+              {error}
+            </div>
+          )}
+
           {/* Trucks Table */}
-          {activeTab === 'trucks' && (
+          {!loading && activeTab === 'trucks' && (
             <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -278,18 +244,20 @@ export function FleetAndDrivers() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
-                    {filteredTrucks.map((truck) => (
-                      <tr key={truck.id} className="hover:bg-slate-50 transition-colors">
+                    {filteredTrucks.map((truck) => {
+                      const truckId = truck._id || truck.id;
+                      return (
+                      <tr key={truckId} className="hover:bg-slate-50 transition-colors">
                         <td className="px-6 py-4 text-sm font-medium text-blue-600">{truck.number}</td>
                         <td className="px-6 py-4 text-sm text-slate-700">{truck.model}</td>
-                        <td className="px-6 py-4 text-sm text-slate-700">{truck.driver.name}</td>
+                        <td className="px-6 py-4 text-sm text-slate-700">{truck.driver?.name}</td>
                         <td className="px-6 py-4 text-sm text-slate-700">
                           <div className="flex items-center gap-2">
                             <Phone className="w-4 h-4 text-slate-400" />
-                            {truck.driver.mobile}
+                            {truck.driver?.mobile}
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm font-semibold text-slate-900">₹{truck.driver.salary.toLocaleString()}</td>
+                        <td className="px-6 py-4 text-sm font-semibold text-slate-900">₹{Number(truck.driver?.salary || 0).toLocaleString()}</td>
                         <td className="px-6 py-4 text-sm">
                           <div className="flex items-center gap-2">
                             <div className={`w-2 h-2 rounded-full ${getStatusDot(truck.status)}`}></div>
@@ -311,13 +279,14 @@ export function FleetAndDrivers() {
                         <td className="px-6 py-4 text-sm">
                           <div className="flex items-center gap-2">
                             <button
+                              onClick={() => navigate(`/add-new-truck/${truckId}`)}
                               className="p-2 hover:bg-slate-200 text-slate-600 rounded transition-colors"
                               title="Edit Truck Info"
                             >
                               <Edit2 className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => handleDeleteTruck(truck.id)}
+                              onClick={() => handleDeleteTruck(truckId)}
                               className="p-2 hover:bg-red-50 text-red-600 rounded transition-colors"
                               title="Remove Truck"
                             >
@@ -326,7 +295,8 @@ export function FleetAndDrivers() {
                           </div>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -334,12 +304,12 @@ export function FleetAndDrivers() {
           )}
 
           {/* Alerts Tab */}
-          {activeTab === 'alerts' && (
+          {!loading && activeTab === 'alerts' && (
             <div className="space-y-4">
               {trucks
                 .filter((truck) => isInsuranceExpired(truck.insuranceExpiry) || isInsuranceExpiringSoon(truck.insuranceExpiry))
                 .map((truck) => (
-                  <div key={truck.id} className="bg-white rounded-lg border border-slate-200 p-4">
+                  <div key={truck._id || truck.id} className="bg-white rounded-lg border border-slate-200 p-4">
                     <div className="flex items-start gap-4">
                       <div className={`p-2 rounded-lg ${isInsuranceExpired(truck.insuranceExpiry) ? 'bg-red-100' : 'bg-amber-100'}`}>
                         <AlertCircle className={`w-6 h-6 ${isInsuranceExpired(truck.insuranceExpiry) ? 'text-red-600' : 'text-amber-600'}`} />

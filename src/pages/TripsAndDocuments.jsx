@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Search, Edit2, Trash2, FileText, Download, Eye, Filter, ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { Topbar } from '../components/Topbar';
+import { billing } from '../services/api';
 
 export function TripsAndDocuments() {
   const navigate = useNavigate();
@@ -12,10 +13,17 @@ export function TripsAndDocuments() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [loadError, setLoadError] = useState('');
+
+  const [paymentForm, setPaymentForm] = useState({ paymentType: 'Full Payment', amount: '', paymentMethod: 'Cash', date: '' });
+  const [editForm, setEditForm] = useState({ truck: '', lr: '', bill: '', partyName: '', amount: '', date: '', status: 'Pending' });
+  const [savingPayment, setSavingPayment] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -64,48 +72,29 @@ export function TripsAndDocuments() {
     }
   };
 
-  // Sample trips data
-  const [trips, setTrips] = useState([
-    {
-      id: 'TP2026-001',
-      truck: 'MH-01-AB-1234',
-      lr: 'LR/2026/001',
-      bill: 'INV-2026-001',
-      partyName: 'ABC Enterprises',
-      status: 'Paid',
-      amount: 15000,
-      date: '2026-05-20',
-      documents: { tax: true, lr: true, goods: true },
-    },
-    {
-      id: 'TP2026-002',
-      truck: 'MH-01-CD-5678',
-      lr: 'LR/2026/002',
-      bill: 'INV-2026-002',
-      partyName: 'XYZ Traders',
-      status: 'Partial',
-      amount: 22000,
-      date: '2026-05-21',
-      documents: { tax: true, lr: true, goods: false },
-    },
-    {
-      id: 'TP2026-003',
-      truck: 'MH-01-EF-9012',
-      lr: 'LR/2026/003',
-      bill: 'INV-2026-003',
-      partyName: 'Global Logistics',
-      status: 'Pending',
-      amount: 18500,
-      date: '2026-05-22',
-      documents: { tax: true, lr: false, goods: true },
-    },
-  ]);
+  const [trips, setTrips] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await billing.list();
+        if (!cancelled) setTrips(res.billingTrips);
+      } catch (err) {
+        if (!cancelled) setLoadError(err.message || 'Failed to load trips');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const filteredTrips = trips.filter((trip) => {
     const matchesSearch =
       trip.truck.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      trip.lr.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      trip.bill.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (trip.lr || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (trip.bill || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       trip.partyName.toLowerCase().includes(searchQuery.toLowerCase());
 
     if (filterType === 'all') return matchesSearch;
@@ -125,8 +114,65 @@ export function TripsAndDocuments() {
     }
   };
 
-  const handleDeleteTrip = (id) => {
-    setTrips(trips.filter((trip) => trip.id !== id));
+  const handleDeleteTrip = async (id) => {
+    try {
+      await billing.remove(id);
+      setTrips((prev) => prev.filter((trip) => (trip._id || trip.id) !== id));
+    } catch (err) {
+      setLoadError(err.message || 'Failed to delete trip');
+    }
+  };
+
+  const openPaymentModal = (trip) => {
+    setSelectedTrip(trip);
+    setPaymentForm({ paymentType: 'Full Payment', amount: String(trip.amount), paymentMethod: 'Cash', date: new Date().toISOString().slice(0, 10) });
+    setShowPaymentModal(true);
+  };
+
+  const handleRecordPayment = async () => {
+    if (!selectedTrip) return;
+    setSavingPayment(true);
+    try {
+      const tripId = selectedTrip._id || selectedTrip.id;
+      const status = paymentForm.paymentType === 'Full Payment' ? 'Paid' : 'Partial';
+      const res = await billing.update(tripId, { status, amount: Number(paymentForm.amount) });
+      setTrips((prev) => prev.map((t) => ((t._id || t.id) === tripId ? res.billingTrip : t)));
+      setShowPaymentModal(false);
+    } catch (err) {
+      setLoadError(err.message || 'Failed to record payment');
+    } finally {
+      setSavingPayment(false);
+    }
+  };
+
+  const openEditModal = (trip) => {
+    setSelectedTrip(trip);
+    setEditForm({
+      truck: trip.truck,
+      lr: trip.lr || '',
+      bill: trip.bill || '',
+      partyName: trip.partyName,
+      amount: String(trip.amount),
+      date: trip.date ? trip.date.slice(0, 10) : '',
+      status: trip.status,
+    });
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedTrip) return;
+    setSavingEdit(true);
+    try {
+      const tripId = selectedTrip._id || selectedTrip.id;
+      const payload = { ...editForm, amount: Number(editForm.amount) };
+      const res = await billing.update(tripId, payload);
+      setTrips((prev) => prev.map((t) => ((t._id || t.id) === tripId ? res.billingTrip : t)));
+      setShowEditModal(false);
+    } catch (err) {
+      setLoadError(err.message || 'Failed to save trip');
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   return (
@@ -204,8 +250,18 @@ export function TripsAndDocuments() {
         </button>
       </div>
 
+      {loadError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+          {loadError}
+        </div>
+      )}
+
+      {loading && (
+        <div className="text-center py-12 text-slate-500">Loading trips...</div>
+      )}
+
       {/* Trips Table */}
-      {activeTab === 'trips' && (
+      {!loading && activeTab === 'trips' && (
         <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -222,9 +278,11 @@ export function TripsAndDocuments() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {filteredTrips.map((trip) => (
-                  <tr key={trip.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium text-blue-600">{trip.id}</td>
+                {filteredTrips.map((trip) => {
+                  const tripId = trip._id || trip.id;
+                  return (
+                  <tr key={tripId} className="hover:bg-slate-50 transition-colors">
+                    <td className="px-6 py-4 text-sm font-medium text-blue-600">{tripId}</td>
                     <td className="px-6 py-4 text-sm text-slate-700">{trip.truck}</td>
                     <td className="px-6 py-4 text-sm text-slate-700">{trip.lr}</td>
                     <td className="px-6 py-4 text-sm text-slate-700">{trip.bill}</td>
@@ -238,23 +296,21 @@ export function TripsAndDocuments() {
                     <td className="px-6 py-4 text-sm">
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => {
-                            setSelectedTrip(trip);
-                            setShowPaymentModal(true);
-                          }}
+                          onClick={() => openPaymentModal(trip)}
                           className="p-2 hover:bg-blue-50 text-blue-600 rounded transition-colors"
                           title="Record Payment"
                         >
                           <Download className="w-4 h-4" />
                         </button>
                         <button
+                          onClick={() => openEditModal(trip)}
                           className="p-2 hover:bg-slate-200 text-slate-600 rounded transition-colors"
                           title="Edit"
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDeleteTrip(trip.id)}
+                          onClick={() => handleDeleteTrip(tripId)}
                           className="p-2 hover:bg-red-50 text-red-600 rounded transition-colors"
                           title="Delete"
                         >
@@ -263,7 +319,8 @@ export function TripsAndDocuments() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -271,12 +328,12 @@ export function TripsAndDocuments() {
       )}
 
       {/* Documents Tab */}
-      {activeTab === 'documents' && (
+      {!loading && activeTab === 'documents' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTrips.map((trip) => (
-            <div key={trip.id} className="bg-white rounded-lg border border-slate-200 p-6">
+            <div key={trip._id || trip.id} className="bg-white rounded-lg border border-slate-200 p-6">
               <div className="mb-4">
-                <h3 className="text-lg font-semibold text-slate-900">{trip.id}</h3>
+                <h3 className="text-lg font-semibold text-slate-900">{trip._id || trip.id}</h3>
                 <p className="text-sm text-slate-600">{trip.partyName}</p>
               </div>
               <div className="space-y-3">
@@ -344,7 +401,7 @@ export function TripsAndDocuments() {
                 <>
                   <div className="bg-slate-50 p-4 rounded-lg">
                     <p className="text-sm text-slate-600">Trip</p>
-                    <p className="text-lg font-semibold text-slate-900">{selectedTrip.id}</p>
+                    <p className="text-lg font-semibold text-slate-900">{selectedTrip._id || selectedTrip.id}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
@@ -362,7 +419,11 @@ export function TripsAndDocuments() {
               )}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Payment Type</label>
-                <select className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select
+                  value={paymentForm.paymentType}
+                  onChange={(e) => setPaymentForm((prev) => ({ ...prev, paymentType: e.target.value }))}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
                   <option>Full Payment</option>
                   <option>Partial Payment</option>
                 </select>
@@ -372,12 +433,18 @@ export function TripsAndDocuments() {
                 <input
                   type="number"
                   placeholder="0"
+                  value={paymentForm.amount}
+                  onChange={(e) => setPaymentForm((prev) => ({ ...prev, amount: e.target.value }))}
                   className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Payment Method</label>
-                <select className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <select
+                  value={paymentForm.paymentMethod}
+                  onChange={(e) => setPaymentForm((prev) => ({ ...prev, paymentMethod: e.target.value }))}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
                   <option>Cash</option>
                   <option>Cheque</option>
                   <option>Bank Transfer</option>
@@ -388,6 +455,8 @@ export function TripsAndDocuments() {
                 <label className="block text-sm font-medium text-slate-700 mb-2">Date</label>
                 <input
                   type="date"
+                  value={paymentForm.date}
+                  onChange={(e) => setPaymentForm((prev) => ({ ...prev, date: e.target.value }))}
                   className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -399,10 +468,115 @@ export function TripsAndDocuments() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => setShowPaymentModal(false)}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  onClick={handleRecordPayment}
+                  disabled={savingPayment}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
                 >
-                  Record Payment
+                  {savingPayment ? 'Saving...' : 'Record Payment'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Trip Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+            <div className="p-6 border-b border-slate-200 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-slate-900">Edit Trip</h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-slate-500 hover:text-slate-700"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Truck</label>
+                <input
+                  type="text"
+                  value={editForm.truck}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, truck: e.target.value }))}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">LR</label>
+                  <input
+                    type="text"
+                    value={editForm.lr}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, lr: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Bill</label>
+                  <input
+                    type="text"
+                    value={editForm.bill}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, bill: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Party Name</label>
+                <input
+                  type="text"
+                  value={editForm.partyName}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, partyName: e.target.value }))}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Amount (₹)</label>
+                  <input
+                    type="number"
+                    value={editForm.amount}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, amount: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Date</label>
+                  <input
+                    type="date"
+                    value={editForm.date}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, date: e.target.value }))}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Status</label>
+                <select
+                  value={editForm.status}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value }))}
+                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option>Paid</option>
+                  <option>Partial</option>
+                  <option>Pending</option>
+                </select>
+              </div>
+              <div className="pt-4 flex gap-3">
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={savingEdit}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
+                >
+                  {savingEdit ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </div>

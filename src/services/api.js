@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://103.212.121.139:1964';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export const apiCall = async (endpoint, options = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;
@@ -110,6 +110,54 @@ export const trips = {
     apiCall(`/trips/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
   remove: (id) => apiCall(`/trips/${id}`, { method: 'DELETE' }),
+};
+
+// Fleet & Drivers — a truck roster, each with its embedded driver.
+export const fleet = {
+  list: () => apiCall('/trucks'),
+
+  create: (payload) =>
+    apiCall('/trucks', { method: 'POST', body: JSON.stringify(payload) }),
+
+  update: (id, payload) =>
+    apiCall(`/trucks/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  remove: (id) => apiCall(`/trucks/${id}`, { method: 'DELETE' }),
+};
+
+// Daily Ledger — income/expense entries.
+export const ledger = {
+  list: () => apiCall('/ledger'),
+
+  create: (payload) =>
+    apiCall('/ledger', { method: 'POST', body: JSON.stringify(payload) }),
+
+  update: (id, payload) =>
+    apiCall(`/ledger/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  remove: (id) => apiCall(`/ledger/${id}`, { method: 'DELETE' }),
+};
+
+// Trips & Documents — freight/billing records (party, LR, bill, payment status).
+// Distinct from `trips` above, which is route-planning (origin/destination/device).
+export const billing = {
+  list: () => apiCall('/billing-trips'),
+
+  create: (payload) =>
+    apiCall('/billing-trips', { method: 'POST', body: JSON.stringify(payload) }),
+
+  update: (id, payload) =>
+    apiCall(`/billing-trips/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  remove: (id) => apiCall(`/billing-trips/${id}`, { method: 'DELETE' }),
+};
+
+// Authenticated user's profile — company/bank details shown in Settings.
+export const user = {
+  getProfile: () => apiCall('/user/profile'),
+
+  updateProfile: (payload) =>
+    apiCall('/user/profile', { method: 'PUT', body: JSON.stringify(payload) }),
 };
 
 // Geo helpers backed by the free OSM ecosystem — same map data as the Leaflet

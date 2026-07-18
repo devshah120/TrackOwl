@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Search, Edit2, Trash2, Filter, ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell, Download, Upload, AlertCircle, Save, User, Building, CreditCard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { Topbar } from '../components/Topbar';
+import { user as userApi } from '../services/api';
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -65,22 +66,56 @@ export function SettingsPage() {
 
   // Company settings state
   const [companySettings, setCompanySettings] = useState({
-    companyName: 'TrackOwl Logistics',
-    address: '123 Business Street',
-    city: 'Mumbai',
-    mobileNumber: '+91-9876543210',
-    gstNumber: '27AABCT1234H1Z0',
-    panNumber: 'AABCT1234H',
+    companyName: '',
+    address: '',
+    city: '',
+    mobileNumber: '',
+    gstNumber: '',
+    panNumber: '',
   });
 
   // Bank details state
   const [bankDetails, setBankDetails] = useState({
-    accountName: 'TrackOwl Logistics Pvt Ltd',
-    accountNumber: '123456789012345',
-    bankName: 'HDFC Bank',
-    ifscCode: 'HDFC0000001',
-    branchName: 'Mumbai Branch',
+    accountName: '',
+    accountNumber: '',
+    bankName: '',
+    ifscCode: '',
+    branchName: '',
   });
+
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await userApi.getProfile();
+        if (cancelled) return;
+        const u = res.user;
+        setCompanySettings({
+          companyName: u.company || '',
+          address: u.address || '',
+          city: u.city || '',
+          mobileNumber: u.mobile || '',
+          gstNumber: u.gstNumber || '',
+          panNumber: u.panNumber || '',
+        });
+        setBankDetails({
+          accountName: u.bankDetails?.accountName || '',
+          accountNumber: u.bankDetails?.accountNumber || '',
+          bankName: u.bankDetails?.bankName || '',
+          ifscCode: u.bankDetails?.ifscCode || '',
+          branchName: u.bankDetails?.branchName || '',
+        });
+      } catch (err) {
+        if (!cancelled) setProfileError(err.message || 'Failed to load profile');
+      } finally {
+        if (!cancelled) setProfileLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // User management state
   const [users, setUsers] = useState([
@@ -113,22 +148,37 @@ export function SettingsPage() {
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', role: 'Operator' });
 
-  const handleSaveCompanySettings = () => {
+  const handleSaveCompanySettings = async () => {
     setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      await userApi.updateProfile({
+        company: companySettings.companyName,
+        address: companySettings.address,
+        city: companySettings.city,
+        mobile: companySettings.mobileNumber,
+        gstNumber: companySettings.gstNumber,
+        panNumber: companySettings.panNumber,
+      });
       setSuccessMessage('Company settings saved successfully!');
       setTimeout(() => setSuccessMessage(''), 3000);
-    }, 1000);
+    } catch (err) {
+      setProfileError(err.message || 'Failed to save company settings');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleSaveBankDetails = () => {
+  const handleSaveBankDetails = async () => {
     setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      await userApi.updateProfile({ bankDetails });
       setSuccessMessage('Bank details saved successfully!');
       setTimeout(() => setSuccessMessage(''), 3000);
-    }, 1000);
+    } catch (err) {
+      setProfileError(err.message || 'Failed to save bank details');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleExportData = () => {
@@ -234,6 +284,13 @@ export function SettingsPage() {
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-green-800 flex items-center gap-2">
               <AlertCircle className="w-5 h-5" />
               {successMessage}
+            </div>
+          )}
+
+          {profileError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" />
+              {profileError}
             </div>
           )}
 

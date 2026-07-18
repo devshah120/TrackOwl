@@ -1,73 +1,113 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { TrendingUp, Truck, AlertCircle, Check } from 'lucide-react';
 import { FleetMapWidget } from '../components/FleetMapWidget';
+import { fleet, ledger, billing } from '../services/api';
+
+const STATUS_DISPLAY = { Running: 'moving', Idle: 'idle', Stopped: 'stopped' };
 
 export function Dashboard() {
-  const [selectedTruck, setSelectedTruck] = useState('TRK-001');
+  const [selectedTruck, setSelectedTruck] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [trucksData, setTrucksData] = useState([]);
+  const [ledgerData, setLedgerData] = useState([]);
+  const [billingData, setBillingData] = useState([]);
 
-  // Sample data - replace with API calls
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [fleetRes, ledgerRes, billingRes] = await Promise.all([
+          fleet.list(),
+          ledger.list(),
+          billing.list(),
+        ]);
+        if (cancelled) return;
+        setTrucksData(fleetRes.trucks);
+        setLedgerData(ledgerRes.entries);
+        setBillingData(billingRes.billingTrips);
+        if (fleetRes.trucks.length > 0) {
+          setSelectedTruck(fleetRes.trucks[0]._id || fleetRes.trucks[0].id);
+        }
+      } catch (err) {
+        if (!cancelled) setError(err.message || 'Failed to load dashboard data');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const todaysLedger = ledgerData.filter((e) => String(e.date).slice(0, 10) === todayStr);
+  const todaysIncome = todaysLedger.filter((e) => e.type === 'income').reduce((sum, e) => sum + e.amount, 0);
+  const todaysExpense = todaysLedger.filter((e) => e.type === 'expense').reduce((sum, e) => sum + e.amount, 0);
+  const pendingBalance = billingData
+    .filter((b) => b.status !== 'Paid')
+    .reduce((sum, b) => sum + b.amount, 0);
+  const activeTruckCount = trucksData.filter((t) => t.status === 'Running').length;
+
   const stats = [
     {
-      title: 'Total Freight Billed',
-      value: '₹45,230',
-      subtitle: 'All trips combined',
-      icon: TrendingUp,
+      title: 'Active Trucks',
+      value: String(activeTruckCount),
+      subtitle: `${trucksData.length} total in fleet`,
+      icon: Truck,
       color: 'bg-blue-100',
       textColor: 'text-blue-600',
     },
     {
-      title: 'Amount Collected',
-      value: '₹38,450',
-      subtitle: 'Payments received so far',
+      title: "Today's Income",
+      value: `₹${todaysIncome.toLocaleString()}`,
+      subtitle: 'Ledger income entries today',
       icon: Check,
       color: 'bg-green-100',
       textColor: 'text-green-600',
     },
     {
       title: 'Pending Balance',
-      value: '₹6,780',
-      subtitle: 'Amount still outstanding',
+      value: `₹${pendingBalance.toLocaleString()}`,
+      subtitle: 'Outstanding billing trips',
       icon: AlertCircle,
       color: 'bg-yellow-100',
       textColor: 'text-yellow-600',
     },
     {
-      title: 'Net Profit',
-      value: '₹12,450',
-      subtitle: 'Collected minus all expenses',
+      title: 'Net Profit (Today)',
+      value: `₹${(todaysIncome - todaysExpense).toLocaleString()}`,
+      subtitle: "Today's income minus expenses",
       icon: TrendingUp,
       color: 'bg-purple-100',
       textColor: 'text-purple-600',
     },
   ];
 
-  const fleetStatus = [
-    { status: 'Running', count: 8, color: 'bg-green-500', textColor: 'text-green-600' },
-    { status: 'Idle', count: 3, color: 'bg-yellow-500', textColor: 'text-yellow-600' },
-    { status: 'Stopped', count: 2, color: 'bg-red-500', textColor: 'text-red-600' },
-  ];
+  const trucks = trucksData.map((t) => ({
+    id: t._id || t.id,
+    name: t.model,
+    status: STATUS_DISPLAY[t.status] || 'idle',
+    location: t.currentRoute || '—',
+    driver: t.driver?.name || '—',
+  }));
 
-  const trucks = [
-    { id: 'TRK-001', name: 'Ashok Leyland 16ft', status: 'moving', location: 'Ahmedabad', driver: 'Rajesh Kumar' },
-    { id: 'TRK-002', name: 'Tata 18ft', status: 'idle', location: 'Jaipur Warehouse', driver: 'Amit Singh' },
-    { id: 'TRK-003', name: 'Mahindra 20ft', status: 'moving', location: 'Bangalore-Chennai Route', driver: 'Priya Sharma' },
-    { id: 'TRK-004', name: 'Hino 10ft', status: 'stopped', location: 'Pune Rest Stop', driver: 'Vikram Patel' },
-    { id: 'TRK-005', name: 'Volvo FH16', status: 'offline', location: 'Mumbai Depot', driver: 'Manish Verma' },
-  ];
+  const recentTrips = [...billingData]
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 5)
+    .map((b) => ({
+      id: b._id || b.id,
+      route: `${b.partyName} (${b.truck})`,
+      distance: b.bill || '—',
+      freight: `₹${b.amount.toLocaleString()}`,
+      status: b.status,
+    }));
 
-  const recentTrips = [
-    { id: 1, route: 'Delhi → Mumbai', distance: '1,400 km', freight: '₹8,500', status: 'Completed' },
-    { id: 2, route: 'Bangalore → Chennai', distance: '350 km', freight: '₹4,200', status: 'In Transit' },
-    { id: 3, route: 'Jaipur → Delhi', distance: '260 km', freight: '₹3,100', status: 'Completed' },
-    { id: 4, route: 'Pune → Nashik', distance: '210 km', freight: '₹2,800', status: 'In Transit' },
-  ];
-
-  const pendingPayments = [
-    { buyer: 'ABC Logistics Ltd', amount: '₹2,500', daysOverdue: 5 },
-    { buyer: 'XYZ Cargo Services', amount: '₹1,800', daysOverdue: 2 },
-    { buyer: 'Freight Express Co.', amount: '₹2,480', daysOverdue: 8 },
-    { buyer: 'Patel Express Co.', amount: '₹5,480', daysOverdue: 4 },
-  ];
+  const pendingPayments = billingData
+    .filter((b) => b.status !== 'Paid')
+    .map((b) => ({
+      buyer: b.partyName,
+      amount: `₹${b.amount.toLocaleString()}`,
+      daysOverdue: Math.max(0, Math.floor((Date.now() - new Date(b.date)) / (1000 * 60 * 60 * 24))),
+    }));
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -85,10 +125,12 @@ export function Dashboard() {
         return 'bg-yellow-100 text-yellow-800';
       case 'Stopped':
         return 'bg-red-100 text-red-800';
-      case 'Completed':
+      case 'Paid':
         return 'bg-green-100 text-green-800';
-      case 'In Transit':
-        return 'bg-blue-100 text-blue-800';
+      case 'Partial':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'Pending':
+        return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -102,6 +144,18 @@ export function Dashboard() {
         <p className="text-slate-600 mt-1">Welcome back! Here's your fleet overview.</p>
       </div>
 
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+          {error}
+        </div>
+      )}
+
+      {loading && (
+        <div className="text-center py-12 text-slate-500">Loading dashboard...</div>
+      )}
+
+      {!loading && (
+      <>
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat) => {
@@ -167,8 +221,8 @@ export function Dashboard() {
             <table className="w-full">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Route</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Distance</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Party / Truck</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Bill</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Freight</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Status</th>
                 </tr>
@@ -218,6 +272,8 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

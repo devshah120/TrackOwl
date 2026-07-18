@@ -1,17 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronDown, LogOut, Menu, X, Bell, ArrowLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LayoutDashboard, FileText, Calendar, Truck, Settings } from 'lucide-react';
 import { Topbar } from '../components/Topbar';
+import { ledger } from '../services/api';
 
 export function AddLedgerEntry() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const isEditing = Boolean(id);
   const { user, logout } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
   const [formData, setFormData] = useState({
-    entryType: 'Income',
+    entryType: 'income',
     category: 'Fuel',
     description: '',
     amount: '',
@@ -19,6 +24,30 @@ export function AddLedgerEntry() {
     date: new Date().toISOString().split('T')[0],
     reference: '',
   });
+
+  useEffect(() => {
+    if (!isEditing) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await ledger.list();
+        const entry = res.entries.find((e) => (e._id || e.id) === id);
+        if (!entry || cancelled) return;
+        setFormData({
+          entryType: entry.type,
+          category: entry.category,
+          description: entry.description || '',
+          amount: entry.amount ?? '',
+          paymentMethod: entry.paymentMethod,
+          date: entry.date ? entry.date.slice(0, 10) : '',
+          reference: entry.reference || '',
+        });
+      } catch (err) {
+        if (!cancelled) setError(err.message || 'Failed to load entry');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id, isEditing]);
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -59,10 +88,31 @@ export function AddLedgerEntry() {
     navigate('/daily-ledger');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // TODO: Submit form data to backend
-    navigate('/daily-ledger');
+    setError('');
+    setSubmitting(true);
+    try {
+      const payload = {
+        type: formData.entryType,
+        category: formData.category,
+        description: formData.description,
+        amount: Number(formData.amount),
+        paymentMethod: formData.paymentMethod,
+        date: formData.date,
+        reference: formData.reference,
+      };
+      if (isEditing) {
+        await ledger.update(id, payload);
+      } else {
+        await ledger.create(payload);
+      }
+      navigate('/daily-ledger');
+    } catch (err) {
+      setError(err.message || 'Failed to save entry');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -81,10 +131,18 @@ export function AddLedgerEntry() {
               <ArrowLeft className="w-5 h-5 text-slate-600" />
             </button>
             <div>
-              <h1 className="text-3xl font-bold text-slate-900">Add New Entry</h1>
-              <p className="text-slate-600 mt-1">Create a new income or expense entry</p>
+              <h1 className="text-3xl font-bold text-slate-900">{isEditing ? 'Edit Entry' : 'Add New Entry'}</h1>
+              <p className="text-slate-600 mt-1">
+                {isEditing ? 'Update this income or expense entry' : 'Create a new income or expense entry'}
+              </p>
             </div>
           </div>
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+              {error}
+            </div>
+          )}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-slate-200 p-6 space-y-6">
@@ -97,8 +155,8 @@ export function AddLedgerEntry() {
                 onChange={handleInputChange}
                 className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option>Income</option>
-                <option>Expense</option>
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
               </select>
             </div>
 
@@ -199,9 +257,10 @@ export function AddLedgerEntry() {
               </button>
               <button
                 type="submit"
-                className="flex-1 px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                disabled={submitting}
+                className="flex-1 px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
               >
-                Add Entry
+                {submitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Add Entry'}
               </button>
             </div>
           </form>

@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Search, Edit2, Trash2, Filter, ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell, TrendingUp, TrendingDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Topbar } from '../components/Topbar';
+import { ledger } from '../services/api';
 
 export function DailyLedger() {
   const navigate = useNavigate();
@@ -66,79 +67,24 @@ export function DailyLedger() {
     }
   };
 
-  // Sample ledger data
-  const [ledgerEntries, setLedgerEntries] = useState([
-    {
-      id: 'LE2026-001',
-      date: '2026-05-20',
-      type: 'income',
-      category: 'Trip',
-      description: 'Trip TP2026-001 - ABC Enterprises',
-      amount: 15000,
-      paymentMethod: 'Bank Transfer',
-      reference: 'INV-2026-001',
-    },
-    {
-      id: 'LE2026-002',
-      date: '2026-05-20',
-      type: 'expense',
-      category: 'Fuel',
-      description: 'Fuel - MH-01-AB-1234',
-      amount: 2500,
-      paymentMethod: 'Cash',
-      reference: 'FUL-20260520-001',
-    },
-    {
-      id: 'LE2026-003',
-      date: '2026-05-21',
-      type: 'income',
-      category: 'Trip',
-      description: 'Trip TP2026-002 - XYZ Traders',
-      amount: 22000,
-      paymentMethod: 'Cheque',
-      reference: 'INV-2026-002',
-    },
-    {
-      id: 'LE2026-004',
-      date: '2026-05-21',
-      type: 'expense',
-      category: 'Toll',
-      description: 'Toll - Highway Toll',
-      amount: 450,
-      paymentMethod: 'Cash',
-      reference: 'TOL-20260521-001',
-    },
-    {
-      id: 'LE2026-005',
-      date: '2026-05-21',
-      type: 'expense',
-      category: 'Maintenance',
-      description: 'Vehicle maintenance - MH-01-CD-5678',
-      amount: 3500,
-      paymentMethod: 'Card',
-      reference: 'MNT-20260521-001',
-    },
-    {
-      id: 'LE2026-006',
-      date: '2026-05-22',
-      type: 'income',
-      category: 'Trip',
-      description: 'Trip TP2026-003 - Global Logistics',
-      amount: 18500,
-      paymentMethod: 'Bank Transfer',
-      reference: 'INV-2026-003',
-    },
-    {
-      id: 'LE2026-007',
-      date: '2026-05-22',
-      type: 'expense',
-      category: 'Salary',
-      description: 'Driver salary - May',
-      amount: 8000,
-      paymentMethod: 'Cash',
-      reference: 'SAL-MAY-2026',
-    },
-  ]);
+  const [ledgerEntries, setLedgerEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await ledger.list();
+        if (!cancelled) setLedgerEntries(res.entries);
+      } catch (err) {
+        if (!cancelled) setError(err.message || 'Failed to load ledger entries');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const getDateRange = () => {
     const today = new Date();
@@ -211,13 +157,14 @@ export function DailyLedger() {
     // Daily income/expense chart data
     const dailyData = {};
     filteredForStats.forEach(entry => {
-      if (!dailyData[entry.date]) {
-        dailyData[entry.date] = { date: entry.date, income: 0, expense: 0 };
+      const day = String(entry.date).slice(0, 10);
+      if (!dailyData[day]) {
+        dailyData[day] = { date: day, income: 0, expense: 0 };
       }
       if (entry.type === 'income') {
-        dailyData[entry.date].income += entry.amount;
+        dailyData[day].income += entry.amount;
       } else {
-        dailyData[entry.date].expense += entry.amount;
+        dailyData[day].expense += entry.amount;
       }
     });
 
@@ -249,8 +196,13 @@ export function DailyLedger() {
     return type === 'income' ? '+' : '−';
   };
 
-  const handleDeleteEntry = (id) => {
-    setLedgerEntries(ledgerEntries.filter((entry) => entry.id !== id));
+  const handleDeleteEntry = async (id) => {
+    try {
+      await ledger.remove(id);
+      setLedgerEntries((prev) => prev.filter((entry) => (entry._id || entry.id) !== id));
+    } catch (err) {
+      setError(err.message || 'Failed to delete entry');
+    }
   };
 
   return (
@@ -547,6 +499,16 @@ export function DailyLedger() {
             </div>
           </div>
 
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+              {error}
+            </div>
+          )}
+
+          {loading ? (
+            <div className="text-center py-12 text-slate-500">Loading ledger entries...</div>
+          ) : (
+          <>
           {/* Entries Table */}
           <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
             <div className="overflow-x-auto">
@@ -563,9 +525,11 @@ export function DailyLedger() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {filteredEntries.map((entry) => (
-                    <tr key={entry.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-4 text-sm text-slate-700">{entry.date}</td>
+                  {filteredEntries.map((entry) => {
+                    const entryId = entry._id || entry.id;
+                    return (
+                    <tr key={entryId} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 text-sm text-slate-700">{String(entry.date).slice(0, 10)}</td>
                       <td className="px-6 py-4 text-sm">
                         <span className={`font-medium ${getTypeColor(entry.type)}`}>
                           {entry.type === 'income' ? 'Income' : 'Expense'}
@@ -582,13 +546,14 @@ export function DailyLedger() {
                       <td className="px-6 py-4 text-sm">
                         <div className="flex items-center gap-2">
                           <button
+                            onClick={() => navigate(`/add-ledger-entry/${entryId}`)}
                             className="p-2 hover:bg-slate-200 text-slate-600 rounded transition-colors"
                             title="Edit"
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => handleDeleteEntry(entry.id)}
+                            onClick={() => handleDeleteEntry(entryId)}
                             className="p-2 hover:bg-red-50 text-red-600 rounded transition-colors"
                             title="Delete"
                           >
@@ -597,7 +562,8 @@ export function DailyLedger() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -607,6 +573,8 @@ export function DailyLedger() {
             <div className="text-center py-12">
               <p className="text-slate-500">No entries found for the selected filters.</p>
             </div>
+          )}
+          </>
           )}
         </div>
       </main>

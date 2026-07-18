@@ -87,6 +87,14 @@ function App() {
         }
       />
       <Route
+        path="/add-ledger-entry/:id"
+        element={
+          <ProtectedRoute>
+            <AddLedgerEntry />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/fleet-and-drivers"
         element={
           <ProtectedRoute>
@@ -112,6 +120,14 @@ function App() {
       />
       <Route
         path="/add-new-truck"
+        element={
+          <ProtectedRoute>
+            <AddNewTruck />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/add-new-truck/:id"
         element={
           <ProtectedRoute>
             <AddNewTruck />
