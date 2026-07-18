@@ -5,28 +5,38 @@ import { admin } from '../services/api';
 // Same two-step device registration as AddDeviceModal, but for superadmin:
 // step 0 picks which client owns the new vehicle, since the admin API needs
 // an explicit owner (there's no "caller's own fleet" the way there is for a
-// client). Steps 1–2 (type/name, then setup instructions) are identical.
-export function AdminAddDeviceModal({ clients, onClose, onRegistered }) {
+// client). The vehicle "name" is one of that client's existing trucks (added
+// on Fleet Oversight) rather than free text, so the tracking device always
+// lines up with a real truck number instead of drifting from it.
+export function AdminAddDeviceModal({ clients, trucks, onClose, onRegistered }) {
   const [owner, setOwner] = useState('');
+  const [truckId, setTruckId] = useState('');
   const [type, setType] = useState('phone');
-  const [name, setName] = useState('');
   const [customId, setCustomId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [setup, setSetup] = useState(null);
   const [copied, setCopied] = useState(null);
 
+  const ownerTrucks = trucks.filter((t) => (t.owner?._id || t.owner) === owner);
+  const selectedTruck = ownerTrucks.find((t) => (t._id || t.id) === truckId);
+
   const isHardware = type === 'hardware';
-  const canSubmit = owner && name.trim() && (!isHardware || customId.trim()) && !busy;
+  const canSubmit = owner && truckId && (!isHardware || customId.trim()) && !busy;
+
+  const changeOwner = (value) => {
+    setOwner(value);
+    setTruckId(''); // the previous truck belongs to a different client
+  };
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (!canSubmit || !selectedTruck) return;
 
     setBusy(true);
     setError(null);
     try {
-      const res = await admin.createDevice(owner, name.trim(), customId.trim() || undefined, type);
+      const res = await admin.createDevice(owner, selectedTruck.number, customId.trim() || undefined, type);
       setSetup(res.setup);
       onRegistered?.(res.device);
     } catch (err) {
@@ -74,7 +84,7 @@ export function AdminAddDeviceModal({ clients, onClose, onRegistered }) {
               </label>
               <select
                 value={owner}
-                onChange={(e) => setOwner(e.target.value)}
+                onChange={(e) => changeOwner(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
               >
                 <option value="">Select a client...</option>
@@ -120,15 +130,28 @@ export function AdminAddDeviceModal({ clients, onClose, onRegistered }) {
 
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">
-                Vehicle name
+                Truck
               </label>
-              <input
-                autoFocus
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Truck 02"
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-              />
+              <select
+                value={truckId}
+                onChange={(e) => setTruckId(e.target.value)}
+                disabled={!owner}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 disabled:bg-slate-50 disabled:text-slate-400"
+              >
+                <option value="">
+                  {owner ? 'Select a truck...' : 'Pick a client first'}
+                </option>
+                {ownerTrucks.map((t) => (
+                  <option key={t._id || t.id} value={t._id || t.id}>
+                    {t.number} — {t.model}
+                  </option>
+                ))}
+              </select>
+              {owner && ownerTrucks.length === 0 && (
+                <p className="mt-1 text-xs text-amber-600">
+                  This client has no trucks yet — add one on Fleet Oversight first.
+                </p>
+              )}
             </div>
 
             {isHardware ? (

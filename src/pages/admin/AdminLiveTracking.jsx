@@ -80,6 +80,7 @@ function PanTo({ position }) {
 export function AdminLiveTracking() {
   const [devices, setDevices] = useState([]);
   const [clients, setClients] = useState([]);
+  const [trucks, setTrucks] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -111,6 +112,7 @@ export function AdminLiveTracking() {
 
   useEffect(() => {
     admin.listUsers().then((res) => setClients(res.users)).catch(() => {});
+    admin.listTrucks().then((res) => setTrucks(res.trucks)).catch(() => {});
   }, []);
 
   const selected = useMemo(
@@ -268,6 +270,7 @@ export function AdminLiveTracking() {
         {adding && (
           <AdminAddDeviceModal
             clients={clients}
+            trucks={trucks}
             onClose={() => setAdding(false)}
             onRegistered={load}
           />

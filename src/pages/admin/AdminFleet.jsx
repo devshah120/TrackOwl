@@ -7,8 +7,6 @@ const emptyForm = {
   owner: '',
   truckNumber: '',
   model: '',
-  status: 'Idle',
-  currentRoute: '',
   driverName: '',
   mobileNumber: '',
   licenseNumber: '',
@@ -25,8 +23,6 @@ function TruckModal({ clients, editingTruck, onClose, onSaved }) {
       owner: editingTruck.owner?._id || editingTruck.owner || '',
       truckNumber: editingTruck.number || '',
       model: editingTruck.model || '',
-      status: editingTruck.status || 'Idle',
-      currentRoute: editingTruck.currentRoute || '',
       driverName: editingTruck.driver?.name || '',
       mobileNumber: editingTruck.driver?.mobile || '',
       licenseNumber: editingTruck.driver?.licenseNumber || '',
@@ -53,8 +49,6 @@ function TruckModal({ clients, editingTruck, onClose, onSaved }) {
         owner: form.owner,
         number: form.truckNumber,
         model: form.model,
-        status: form.status,
-        currentRoute: form.currentRoute,
         registrationDate: form.registrationDate || undefined,
         insuranceExpiry: form.insuranceExpiry || undefined,
         driver: {
@@ -123,20 +117,6 @@ function TruckModal({ clients, editingTruck, onClose, onSaved }) {
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Model</label>
               <input name="model" value={form.model} onChange={change}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
-              <select name="status" value={form.status} onChange={change}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="Running">Running</option>
-                <option value="Idle">Idle</option>
-                <option value="Stopped">Stopped</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Current Route</label>
-              <input name="currentRoute" value={form.currentRoute} onChange={change}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
