@@ -46,7 +46,7 @@ export function Login({ onBackHome }) {
       }));
 
       setTimeout(() => {
-        navigate('/dashboard');
+        navigate(response.user.role === 'superadmin' ? '/admin/overview' : '/dashboard');
       }, 700);
     } catch (err) {
       showAlert(err.message || 'Login failed. Please try again.', 'error');

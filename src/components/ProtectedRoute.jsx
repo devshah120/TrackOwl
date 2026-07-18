@@ -1,13 +1,14 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-export function ProtectedRoute({ children }) {
-  const { isAuthenticated, isInitialized } = useAuth();
-
-  console.log('🛡️ ProtectedRoute - isInitialized:', isInitialized, 'isAuthenticated:', isAuthenticated);
+// `requireSuperAdmin` gates a page to superadmin only, bouncing a client to their
+// dashboard. `clientOnly` is the reverse: gates a page to regular clients,
+// bouncing a superadmin (who has no owned fleet/ledger data to show there) to
+// the admin overview instead.
+export function ProtectedRoute({ children, requireSuperAdmin = false, clientOnly = false }) {
+  const { isAuthenticated, isInitialized, isSuperAdmin } = useAuth();
 
   if (!isInitialized) {
-    console.log('⏳ Auth initialization in progress...');
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -19,10 +20,16 @@ export function ProtectedRoute({ children }) {
   }
 
   if (!isAuthenticated) {
-    console.log('❌ Not authenticated, redirecting to login');
     return <Navigate to="/login" replace />;
   }
 
-  console.log('✅ Authenticated, rendering dashboard');
+  if (requireSuperAdmin && !isSuperAdmin) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (clientOnly && isSuperAdmin) {
+    return <Navigate to="/admin/overview" replace />;
+  }
+
   return children;
 }

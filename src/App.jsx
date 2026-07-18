@@ -25,6 +25,10 @@ import { TripRoutes } from './pages/TripRoutes';
 import { AddNewTruck } from './pages/AddNewTruck';
 import { SettingsPage } from './pages/Settings';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { AdminOverview } from './pages/admin/AdminOverview';
+import { AdminClients } from './pages/admin/AdminClients';
+import { AdminFleet } from './pages/admin/AdminFleet';
+import { AdminLiveTracking } from './pages/admin/AdminLiveTracking';
 
 function App() {
   const navigate = useNavigate();
@@ -49,7 +53,7 @@ function App() {
       <Route
         path="/dashboard/*"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute clientOnly>
             <DashboardLayout />
           </ProtectedRoute>
         }
@@ -57,7 +61,7 @@ function App() {
       <Route
         path="/trips-and-documents"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute clientOnly>
             <TripsAndDocuments />
           </ProtectedRoute>
         }
@@ -65,7 +69,7 @@ function App() {
       <Route
         path="/add-new-trip"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute clientOnly>
             <AddNewTrip />
           </ProtectedRoute>
         }
@@ -73,7 +77,7 @@ function App() {
       <Route
         path="/daily-ledger"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute clientOnly>
             <DailyLedger />
           </ProtectedRoute>
         }
@@ -81,7 +85,7 @@ function App() {
       <Route
         path="/add-ledger-entry"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute clientOnly>
             <AddLedgerEntry />
           </ProtectedRoute>
         }
@@ -89,7 +93,7 @@ function App() {
       <Route
         path="/add-ledger-entry/:id"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute clientOnly>
             <AddLedgerEntry />
           </ProtectedRoute>
         }
@@ -97,7 +101,7 @@ function App() {
       <Route
         path="/fleet-and-drivers"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute clientOnly>
             <FleetAndDrivers />
           </ProtectedRoute>
         }
@@ -105,7 +109,7 @@ function App() {
       <Route
         path="/live-tracking"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute clientOnly>
             <FleetMap />
           </ProtectedRoute>
         }
@@ -113,7 +117,7 @@ function App() {
       <Route
         path="/trip-routes"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute clientOnly>
             <TripRoutes />
           </ProtectedRoute>
         }
@@ -121,7 +125,7 @@ function App() {
       <Route
         path="/add-new-truck"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute clientOnly>
             <AddNewTruck />
           </ProtectedRoute>
         }
@@ -129,7 +133,7 @@ function App() {
       <Route
         path="/add-new-truck/:id"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute clientOnly>
             <AddNewTruck />
           </ProtectedRoute>
         }
@@ -139,6 +143,38 @@ function App() {
         element={
           <ProtectedRoute>
             <SettingsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/overview"
+        element={
+          <ProtectedRoute requireSuperAdmin>
+            <AdminOverview />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/clients"
+        element={
+          <ProtectedRoute requireSuperAdmin>
+            <AdminClients />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/fleet"
+        element={
+          <ProtectedRoute requireSuperAdmin>
+            <AdminFleet />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/live-tracking"
+        element={
+          <ProtectedRoute requireSuperAdmin>
+            <AdminLiveTracking />
           </ProtectedRoute>
         }
       />

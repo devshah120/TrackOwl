@@ -221,6 +221,32 @@ export const geo = {
   },
 };
 
+// Superadmin — platform-wide views across every client. All calls 403 for a
+// regular client; the frontend also hides these routes/pages from them.
+export const admin = {
+  listUsers: () => apiCall('/admin/users'),
+
+  setUserStatus: (id, isActive) =>
+    apiCall(`/admin/users/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    }),
+
+  listTrucks: () => apiCall('/admin/trucks'),
+
+  createTruck: (payload) =>
+    apiCall('/admin/trucks', { method: 'POST', body: JSON.stringify(payload) }),
+
+  updateTruck: (id, payload) =>
+    apiCall(`/admin/trucks/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  removeTruck: (id) => apiCall(`/admin/trucks/${id}`, { method: 'DELETE' }),
+
+  listDevices: () => apiCall('/admin/devices'),
+
+  getStats: () => apiCall('/admin/stats'),
+};
+
 // Public (no auth): the trip behind a share token, for the client map page.
 export const publicTrip = (token) => apiCall(`/trips/public/${token}`);
 

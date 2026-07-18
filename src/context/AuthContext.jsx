@@ -114,6 +114,7 @@ export function AuthProvider({ children }) {
     isInitialized,
     error,
     isAuthenticated,
+    isSuperAdmin: user?.role === 'superadmin',
     login,
     register,
     logout,

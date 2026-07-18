@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin } from 'lucide-react';
+import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin, ShieldCheck, Users } from 'lucide-react';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -23,13 +23,23 @@ const timeAgo = (iso) => {
 // `path` is the real standalone route each item opens. `match` lists the URL
 // fragments that should light the item as active (a page and its sub-pages, e.g.
 // the ledger and its add-entry screen).
-const NAV_ITEMS = [
+const CLIENT_NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', match: ['dashboard'] },
   { id: 'trips', label: 'Trips & Documents', icon: FileText, path: '/trips-and-documents', match: ['trips-and-documents', 'add-new-trip'] },
   { id: 'ledger', label: 'Daily Ledger', icon: Calendar, path: '/daily-ledger', match: ['daily-ledger', 'add-ledger-entry'] },
-  { id: 'tracking', label: 'Live Tracking', icon: MapPin, path: '/live-tracking', match: ['live-tracking'] },
   { id: 'fleet', label: 'Fleet Management', icon: Truck, path: '/fleet-and-drivers', match: ['fleet-and-drivers', 'add-new-truck'] },
   { id: 'triproutes', label: 'Trip Routes', icon: Route, path: '/trip-routes', match: ['trip-routes'] },
+  { id: 'settings', label: 'Settings', icon: Settings, path: '/settings', match: ['settings'] },
+];
+
+// Superadmin-only: platform-wide views, replacing the per-client nav entirely.
+// Live Tracking lives here (not in the client nav) since it now shows every
+// client's fleet on one global map, per the superadmin build.
+const SUPERADMIN_NAV_ITEMS = [
+  { id: 'admin-overview', label: 'Overview', icon: LayoutDashboard, path: '/admin/overview', match: ['admin/overview'] },
+  { id: 'admin-clients', label: 'Clients', icon: Users, path: '/admin/clients', match: ['admin/clients'] },
+  { id: 'admin-fleet', label: 'Fleet Oversight', icon: Truck, path: '/admin/fleet', match: ['admin/fleet'] },
+  { id: 'admin-tracking', label: 'Live Tracking', icon: MapPin, path: '/admin/live-tracking', match: ['admin/live-tracking'] },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings', match: ['settings'] },
 ];
 
@@ -43,7 +53,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, isSuperAdmin } = useAuth();
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -100,13 +110,14 @@ export function Topbar({ activeMenu, onMenuChange }) {
     }
   };
 
-  const menuItems = NAV_ITEMS;
+  const navItems = isSuperAdmin ? SUPERADMIN_NAV_ITEMS : CLIENT_NAV_ITEMS;
+  const menuItems = navItems;
 
   // Which item is active: honour an explicit activeMenu prop if given, else infer
   // from the current path via each item's `match` fragments.
   const currentPath = location.pathname;
   const derivedActive =
-    NAV_ITEMS.find((i) => i.match.some((m) => currentPath.includes(m)))?.id || 'dashboard';
+    navItems.find((i) => i.match.some((m) => currentPath.includes(m)))?.id || navItems[0].id;
   const effectiveActive = activeMenu || derivedActive;
 
   const handleLogout = () => {
@@ -118,7 +129,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
   // parent passed one, is still notified so layouts that track active state keep
   // working — but routing no longer depends on it.
   const handleMenuClick = (itemId) => {
-    const item = NAV_ITEMS.find((i) => i.id === itemId);
+    const item = navItems.find((i) => i.id === itemId);
     onMenuChange?.(itemId);
     if (item) navigate(item.path);
   };
@@ -131,10 +142,16 @@ export function Topbar({ activeMenu, onMenuChange }) {
           {/* Left: Logo and Desktop Menu */}
           <div className="flex items-center gap-8">
             {/* Logo */}
-            <div className="flex-shrink-0">
+            <div className="flex-shrink-0 flex items-center gap-2">
               <h1 className="text-2xl font-bold">
                 Track<span className="text-blue-600">Owl</span>
               </h1>
+              {isSuperAdmin && (
+                <span className="flex items-center gap-1 rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                  <ShieldCheck className="h-3 w-3" />
+                  Admin
+                </span>
+              )}
             </div>
 
             {/* Desktop Menu */}
@@ -263,7 +280,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
                 </div>
                 <div className="hidden sm:block text-left">
                   <p className="text-sm font-medium text-slate-900">{user?.name || 'User'}</p>
-                  <p className="text-xs text-slate-500">{user?.role || 'Client'}</p>
+                  <p className="text-xs text-slate-500">{isSuperAdmin ? 'Superadmin' : 'Client'}</p>
                 </div>
                 <ChevronDown className="w-4 h-4 text-slate-500" />
               </button>
