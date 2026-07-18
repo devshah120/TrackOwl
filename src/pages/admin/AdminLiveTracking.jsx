@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Truck, RefreshCw, AlertCircle } from 'lucide-react';
+import { Truck, RefreshCw, AlertCircle, Plus } from 'lucide-react';
 import 'leaflet/dist/leaflet.css';
 import { admin } from '../../services/api';
 import { Topbar } from '../../components/Topbar';
+import { AdminAddDeviceModal } from '../../components/AdminAddDeviceModal';
 import truckPng from '../../assets/truck-icon.png';
 
 const POLL_MS = 5000;
@@ -78,9 +79,11 @@ function PanTo({ position }) {
 
 export function AdminLiveTracking() {
   const [devices, setDevices] = useState([]);
+  const [clients, setClients] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
 
   const selectedRef = useRef(selectedId);
   selectedRef.current = selectedId;
@@ -104,6 +107,10 @@ export function AdminLiveTracking() {
     load();
     const timer = setInterval(load, POLL_MS);
     return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    admin.listUsers().then((res) => setClients(res.users)).catch(() => {});
   }, []);
 
   const selected = useMemo(
@@ -134,10 +141,20 @@ export function AdminLiveTracking() {
       <div className="flex flex-1 flex-col gap-4 overflow-hidden p-4 lg:flex-row">
         <aside className="flex w-full flex-col rounded-xl border border-slate-200 bg-white lg:w-80">
           <div className="border-b border-slate-200 p-4">
-            <h2 className="flex items-center gap-2 font-semibold text-slate-900">
-              <Truck className="h-5 w-5 text-sky-600" />
-              All Fleets (Global)
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="flex items-center gap-2 font-semibold text-slate-900">
+                <Truck className="h-5 w-5 text-sky-600" />
+                All Fleets (Global)
+              </h2>
+              <button
+                onClick={() => setAdding(true)}
+                title="Add a vehicle for a client"
+                className="flex items-center gap-1 rounded-lg bg-sky-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-sky-700"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add
+              </button>
+            </div>
             <div className="mt-3 flex gap-2 text-xs">
               <span className="rounded-full bg-green-50 px-2 py-1 font-medium text-green-700">
                 {fleet.moving} moving
@@ -247,6 +264,14 @@ export function AdminLiveTracking() {
             </div>
           )}
         </div>
+
+        {adding && (
+          <AdminAddDeviceModal
+            clients={clients}
+            onClose={() => setAdding(false)}
+            onRegistered={load}
+          />
+        )}
       </div>
     </div>
   );

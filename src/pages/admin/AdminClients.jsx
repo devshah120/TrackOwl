@@ -1,7 +1,101 @@
 import { useEffect, useState } from 'react';
-import { Search, CheckCircle2, XCircle } from 'lucide-react';
+import { Search, CheckCircle2, XCircle, Edit2, Trash2, X } from 'lucide-react';
 import { Topbar } from '../../components/Topbar';
 import { admin } from '../../services/api';
+
+const FLEET_SIZES = ['1–5 trucks', '6–20 trucks', '21–50 trucks', '50+ trucks'];
+
+function EditClientModal({ client, onClose, onSaved }) {
+  const [form, setForm] = useState({
+    name: client.name || '',
+    email: client.email || '',
+    mobile: client.mobile || '',
+    company: client.company || '',
+    fleet: client.fleet || FLEET_SIZES[0],
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  const change = (e) => setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!form.name.trim() || !form.email.trim()) {
+      setError('Name and email are required');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await admin.updateUser(client._id || client.id, form);
+      onSaved(res.user);
+    } catch (err) {
+      setError(err.message || 'Failed to update client');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-xl bg-white p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-slate-900">Edit Client</h2>
+          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
+            <input name="name" value={form.name} onChange={change}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+            <input type="email" name="email" value={form.email} onChange={change}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Mobile</label>
+            <input name="mobile" value={form.mobile} onChange={change}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Company</label>
+            <input name="company" value={form.company} onChange={change}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Fleet Size</label>
+            <select name="fleet" value={form.fleet} onChange={change}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+              {FLEET_SIZES.map((size) => <option key={size} value={size}>{size}</option>)}
+            </select>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose}
+              className="flex-1 px-4 py-2.5 border border-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors">
+              Cancel
+            </button>
+            <button type="submit" disabled={submitting}
+              className="flex-1 px-4 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60">
+              {submitting ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 export function AdminClients() {
   const [clients, setClients] = useState([]);
@@ -9,6 +103,7 @@ export function AdminClients() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [updatingId, setUpdatingId] = useState(null);
+  const [editingClient, setEditingClient] = useState(null);
 
   const load = async () => {
     try {
@@ -34,6 +129,17 @@ export function AdminClients() {
       setError(err.message || 'Failed to update client');
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  const removeClient = async (client) => {
+    const id = client._id || client.id;
+    if (!confirm(`Remove ${client.name} (${client.company})? Their trucks and ledger entries will be deleted too.`)) return;
+    try {
+      await admin.removeUser(id);
+      setClients((prev) => prev.filter((c) => (c._id || c.id) !== id));
+    } catch (err) {
+      setError(err.message || 'Failed to remove client');
     }
   };
 
@@ -107,18 +213,35 @@ export function AdminClients() {
                             </span>
                           </td>
                           <td className="px-6 py-4 text-sm">
-                            <button
-                              onClick={() => toggleActive(client)}
-                              disabled={updatingId === id}
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${
-                                client.isActive
-                                  ? 'bg-red-50 text-red-700 hover:bg-red-100'
-                                  : 'bg-green-50 text-green-700 hover:bg-green-100'
-                              }`}
-                            >
-                              {client.isActive ? <XCircle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                              {client.isActive ? 'Deactivate' : 'Activate'}
-                            </button>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => toggleActive(client)}
+                                disabled={updatingId === id}
+                                title={client.isActive ? 'Deactivate' : 'Activate'}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${
+                                  client.isActive
+                                    ? 'bg-red-50 text-red-700 hover:bg-red-100'
+                                    : 'bg-green-50 text-green-700 hover:bg-green-100'
+                                }`}
+                              >
+                                {client.isActive ? <XCircle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                                {client.isActive ? 'Deactivate' : 'Activate'}
+                              </button>
+                              <button
+                                onClick={() => setEditingClient(client)}
+                                title="Edit Client"
+                                className="p-2 hover:bg-slate-200 text-slate-600 rounded transition-colors"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => removeClient(client)}
+                                title="Remove Client"
+                                className="p-2 hover:bg-red-50 text-red-600 rounded transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -133,6 +256,17 @@ export function AdminClients() {
           )}
         </div>
       </main>
+
+      {editingClient && (
+        <EditClientModal
+          client={editingClient}
+          onClose={() => setEditingClient(null)}
+          onSaved={(updated) => {
+            setClients((prev) => prev.map((c) => ((c._id || c.id) === (updated._id || updated.id) ? { ...c, ...updated } : c)));
+            setEditingClient(null);
+          }}
+        />
+      )}
     </div>
   );
 }

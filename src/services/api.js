@@ -232,6 +232,11 @@ export const admin = {
       body: JSON.stringify({ isActive }),
     }),
 
+  updateUser: (id, payload) =>
+    apiCall(`/admin/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  removeUser: (id) => apiCall(`/admin/users/${id}`, { method: 'DELETE' }),
+
   listTrucks: () => apiCall('/admin/trucks'),
 
   createTruck: (payload) =>
@@ -243,6 +248,14 @@ export const admin = {
   removeTruck: (id) => apiCall(`/admin/trucks/${id}`, { method: 'DELETE' }),
 
   listDevices: () => apiCall('/admin/devices'),
+
+  // Registers a vehicle in the Traccar gateway and assigns it to `owner` (a
+  // client id) in one call — the admin equivalent of tracking.registerDevice.
+  createDevice: (owner, name, uniqueId, type = 'phone') =>
+    apiCall('/admin/devices', {
+      method: 'POST',
+      body: JSON.stringify({ owner, name, type, ...(uniqueId ? { uniqueId } : {}) }),
+    }),
 
   getStats: () => apiCall('/admin/stats'),
 };
