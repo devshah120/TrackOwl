@@ -1,8 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin } from 'lucide-react';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { notifications as notificationsApi } from '../services/api';
+
+const NOTIFICATIONS_POLL_MS = 30000;
+
+const timeAgo = (iso) => {
+  if (!iso) return '';
+  const s = Math.max(0, Math.round((Date.now() - new Date(iso)) / 1000));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.round(s / 60)}m`;
+  if (s < 86400) return `${Math.round(s / 3600)}h`;
+  return `${Math.round(s / 86400)}d`;
+};
 
 // Canonical top navigation, shared by every page. This is the single source of
 // truth for what each menu item is and where it goes — pages must render <Topbar />
@@ -47,17 +59,46 @@ export function Topbar({ activeMenu, onMenuChange }) {
     }
   };
 
-  // Sample notifications - related to TrackOwl fleet tracking
-  const [notifications] = useState([
-    { id: 1, type: 'alert', title: 'Truck Offline', message: "Truck MH-01-AB-1234 has been offline for 2 hours", severity: 'critical', time: '2 min', vehicle: 'MH-01-AB-1234', read: false },
-    { id: 2, type: 'alert', title: 'Speeding Alert', message: "Truck MH-01-CD-5678 exceeded speed limit by 15 km/h on highway NH-48", severity: 'warning', time: '5 min', vehicle: 'MH-01-CD-5678', read: false },
-    { id: 3, type: 'event', title: 'Trip Completed', message: "Trip ID #TP2026-001 completed successfully. Distance: 245 km, Fuel consumed: 35L", time: 'day', read: true },
-    { id: 4, type: 'alert', title: 'Maintenance Due', message: "Truck MH-01-EF-9012 maintenance due. Last service: 45 days ago", severity: 'warning', time: '1 day', vehicle: 'MH-01-EF-9012', read: true },
-    { id: 5, type: 'event', title: 'Driver Added', message: "New driver 'Rajesh Kumar' added to fleet with license DL-MH-2024-0456", time: '2 days', read: true },
-    { id: 6, type: 'alert', title: 'Geofence Breach', message: "Truck MH-01-GH-3456 left designated area near Delhi Distribution Center", severity: 'warning', time: '3 days', vehicle: 'MH-01-GH-3456', read: true },
-  ]);
+  const [notifications, setNotifications] = useState([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await notificationsApi.list();
+        if (!cancelled) setNotifications(res.notifications);
+      } catch {
+        // Bell just stays empty on failure — not worth a page-level error banner.
+      }
+    };
+    load();
+    const timer = setInterval(load, NOTIFICATIONS_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
 
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  const markRead = async (id) => {
+    setNotifications((prev) => prev.map((n) => ((n._id || n.id) === id ? { ...n, read: true } : n)));
+    try {
+      await notificationsApi.markRead(id);
+    } catch {
+      // Best-effort — next poll will reconcile with the server's actual state.
+    }
+  };
+
+  const markAllRead = async (e) => {
+    e.preventDefault();
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    try {
+      await notificationsApi.markAllRead();
+    } catch {
+      // Best-effort — next poll will reconcile with the server's actual state.
+    }
+  };
 
   const menuItems = NAV_ITEMS;
 
@@ -153,13 +194,22 @@ export function Topbar({ activeMenu, onMenuChange }) {
                 <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-slate-200 max-h-96 overflow-y-auto z-[2100]">
                   <div className="p-4 border-b border-slate-200 flex justify-between items-center">
                     <h3 className="text-sm font-semibold text-slate-900">Notification</h3>
-                    <a href="#" className="text-xs text-blue-600 hover:text-blue-700 font-medium">Mark all as read</a>
+                    {unreadCount > 0 && (
+                      <button onClick={markAllRead} className="text-xs text-blue-600 hover:text-blue-700 font-medium">
+                        Mark all as read
+                      </button>
+                    )}
                   </div>
+
+                  {notifications.length === 0 && (
+                    <p className="p-4 text-sm text-slate-500">No notifications yet.</p>
+                  )}
 
                   <div className="divide-y divide-slate-200">
                     {notifications.map((notif) => (
                       <div
-                        key={notif.id}
+                        key={notif._id || notif.id}
+                        onClick={() => !notif.read && markRead(notif._id || notif.id)}
                         className={`p-4 hover:bg-slate-50 transition-colors cursor-pointer ${
                           !notif.read ? 'bg-blue-50' : ''
                         }`}
@@ -184,7 +234,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
                                 )}
                               </div>
                               <div className="flex flex-col items-end gap-2">
-                                <span className="text-xs text-slate-500">{notif.time}</span>
+                                <span className="text-xs text-slate-500">{timeAgo(notif.createdAt)}</span>
                                 {notif.severity === 'critical' && (
                                   <span className="text-xs text-red-600 font-semibold">Critical</span>
                                 )}
@@ -193,19 +243,10 @@ export function Topbar({ activeMenu, onMenuChange }) {
                                 )}
                               </div>
                             </div>
-                            {notif.type === 'alert' && (
-                              <button className="mt-2 px-3 py-1 text-xs text-blue-600 border border-blue-600 rounded hover:bg-blue-50 transition-colors">
-                                View details
-                              </button>
-                            )}
                           </div>
                         </div>
                       </div>
                     ))}
-                  </div>
-
-                  <div className="p-4 border-t border-slate-200 text-center">
-                    <a href="#" className="text-sm text-blue-600 hover:text-blue-700 font-medium">View all</a>
                   </div>
                 </div>
               )}

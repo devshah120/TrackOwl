@@ -140,12 +140,6 @@ export function AddNewTrip() {
     }
   };
 
-  const [notifications] = useState([
-    { id: 1, type: 'alert', title: 'Truck Offline', message: "Truck MH-01-AB-1234 has been offline for 2 hours", severity: 'critical', time: '2 min', vehicle: 'MH-01-AB-1234', read: false },
-  ]);
-
-  const unreadCount = notifications.filter(n => !n.read).length;
-
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({

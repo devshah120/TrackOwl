@@ -160,6 +160,18 @@ export const user = {
     apiCall('/user/profile', { method: 'PUT', body: JSON.stringify(payload) }),
 };
 
+// Notification bell — alerts (insurance expiry, device offline) and events
+// (truck added, trip added/completed), scoped to the caller.
+export const notifications = {
+  list: () => apiCall('/notifications'),
+
+  markRead: (id) =>
+    apiCall(`/notifications/${id}/read`, { method: 'POST' }),
+
+  markAllRead: () =>
+    apiCall('/notifications/read-all', { method: 'POST' }),
+};
+
 // Geo helpers backed by the free OSM ecosystem — same map data as the Leaflet
 // tiles, no API key, no billing. These call third-party services directly from
 // the browser (not through our API), so they're grouped separately.
