@@ -1,23 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
-import L from 'leaflet';
 import { Truck, Link2, Copy, Check, RefreshCw, AlertCircle, Trash2, Plus } from 'lucide-react';
-import 'leaflet/dist/leaflet.css';
 import { tracking } from '../services/api';
 import { AddDeviceModal } from '../components/AddDeviceModal';
 import { Topbar } from '../components/Topbar';
-// Same image as '3d Truck.png' (identical bytes); the space-free name is imported
-// to avoid path-escaping surprises on the Linux build.
-import truckPng from '../assets/truck-icon.png';
+import { GoogleFleetMap } from '../components/GoogleFleetMap';
+import { STATUS_COLOR } from '../components/mapConstants';
 
 const POLL_MS = 5000;
-const INDIA_CENTER = [22.9868, 72.6100];
-
-const STATUS_COLOR = {
-  moving: '#22c55e',
-  idle: '#f59e0b',
-  offline: '#64748b',
-};
 
 const timeAgo = (iso) => {
   if (!iso) return 'never';
@@ -26,68 +15,6 @@ const timeAgo = (iso) => {
   if (s < 3600) return `${Math.round(s / 60)}m ago`;
   return `${Math.round(s / 3600)}h ago`;
 };
-
-// The same 3D truck the dashboard uses. It's drawn in 3/4 perspective, so it is
-// deliberately NOT rotated — spinning a perspective render would read as the truck
-// tipping over. Heading is shown by a separate arrow orbiting the marker instead.
-const truckIcon = (status, course = 0, selected = false) => {
-  const size = selected ? 52 : 42;
-  const ring = STATUS_COLOR[status] || STATUS_COLOR.offline;
-  const box = size + 16;                       // room for the ring and arrow
-
-  return L.divIcon({
-    className: '',                             // suppress Leaflet's white square
-    iconSize: [box, box],
-    iconAnchor: [box / 2, box / 2],
-    popupAnchor: [0, -box / 2],
-    html: `
-      <div style="position:relative;width:${box}px;height:${box}px;">
-
-        <!-- status ring: sits behind the truck -->
-        <div style="
-          position:absolute;inset:6px;border-radius:50%;
-          background:${ring}22;border:2px solid ${ring};
-          ${status === 'moving' ? `box-shadow:0 0 0 4px ${ring}33;` : ''}
-        "></div>
-
-        <!-- heading arrow: orbits the ring, points where the vehicle is going -->
-        ${
-          status === 'moving'
-            ? `<div style="
-                 position:absolute;inset:0;
-                 transform:rotate(${course || 0}deg);
-               ">
-                 <div style="
-                   position:absolute;top:-1px;left:50%;margin-left:-4px;
-                   width:0;height:0;
-                   border-left:4px solid transparent;
-                   border-right:4px solid transparent;
-                   border-bottom:7px solid ${ring};
-                 "></div>
-               </div>`
-            : ''
-        }
-
-        <!-- the truck itself, always upright -->
-        <img src="${truckPng}" alt="" style="
-          position:absolute;top:50%;left:50%;
-          width:${size * 0.72}px;height:auto;
-          transform:translate(-50%,-50%);
-          filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))
-                 ${status === 'offline' ? ' grayscale(1) opacity(.55)' : ''};
-        "/>
-      </div>`,
-  });
-};
-
-// Recentre when the user picks a different vehicle.
-function PanTo({ position }) {
-  const map = useMap();
-  useEffect(() => {
-    if (position) map.flyTo(position, Math.max(map.getZoom(), 15), { duration: 0.8 });
-  }, [position, map]);
-  return null;
-}
 
 export function FleetMap() {
   const [devices, setDevices] = useState([]);
@@ -127,10 +54,6 @@ export function FleetMap() {
     () => devices.find((d) => (d.id || d._id) === selectedId) || null,
     [devices, selectedId]
   );
-
-  const selectedPos = selected?.lastPosition?.latitude
-    ? [selected.lastPosition.latitude, selected.lastPosition.longitude]
-    : null;
 
   const removeDevice = async (device, event) => {
     event.stopPropagation();   // don't also select the row we're deleting
@@ -308,39 +231,11 @@ export function FleetMap() {
            The stat tiles float over the map rather than sitting under it, so
            they never steal height from the map container. --------------------- */}
       <div className="relative min-h-[420px] flex-1 overflow-hidden rounded-xl border border-slate-200">
-        <MapContainer
-          center={selectedPos || INDIA_CENTER}
-          zoom={selectedPos ? 15 : 6}
-          className="h-full w-full"
-        >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution="&copy; OpenStreetMap contributors"
-          />
-          <PanTo position={selectedPos} />
-
-          {devices.map((d) => {
-            if (!d.lastPosition?.latitude) return null;
-            const id = d.id || d._id;
-            return (
-              <Marker
-                key={id}
-                position={[d.lastPosition.latitude, d.lastPosition.longitude]}
-                icon={truckIcon(d.status, d.lastPosition.course, id === selectedId)}
-                eventHandlers={{ click: () => setSelectedId(id) }}
-              >
-                <Popup>
-                  <strong>{d.name}</strong>
-                  <br />
-                  {Math.round(d.lastPosition.speed || 0)} km/h ·{' '}
-                  {d.lastPosition.ignition ? 'ignition on' : 'ignition off'}
-                  <br />
-                  {timeAgo(d.lastSeenAt)}
-                </Popup>
-              </Marker>
-            );
-          })}
-        </MapContainer>
+        <GoogleFleetMap
+          devices={devices}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+        />
 
         {stats && (
           <div className="pointer-events-none absolute bottom-4 left-1/2 z-[1000] flex -translate-x-1/2 gap-2 whitespace-nowrap">

@@ -1,21 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
-import L from 'leaflet';
 import {
   Route as RouteIcon, MapPin, Flag, Plus, Trash2, RefreshCw, AlertCircle,
   Link2, Copy, Check, Navigation, X, Clock, Loader2, CheckCircle2,
 } from 'lucide-react';
-import 'leaflet/dist/leaflet.css';
 import { trips as tripsApi, tracking, geo } from '../services/api';
 import { PlaceSearchInput } from '../components/PlaceSearchInput';
 import { Topbar } from '../components/Topbar';
+import { GoogleFleetMap } from '../components/GoogleFleetMap';
 import { useNavigate } from 'react-router-dom';
-import truckPng from '../assets/truck-icon.png';
 
 const POLL_MS = 5000;
-const INDIA_CENTER = [22.9868, 72.61];
-
-const STATUS_COLOR = { moving: '#22c55e', idle: '#f59e0b', offline: '#64748b' };
 
 const timeAgo = (iso) => {
   if (!iso) return 'never';
@@ -44,80 +38,6 @@ const ARRIVAL_RADIUS_M = 200;
 
 // Short first segment of a place name ("Mumbai, Maharashtra, India" → "Mumbai").
 const shortPlace = (name = '') => name.split(',')[0].trim();
-
-// Reuse the dashboard truck marker (upright 3D render, status ring).
-const truckIcon = (status) => {
-  const size = 40;
-  const ring = STATUS_COLOR[status] || STATUS_COLOR.offline;
-  const box = size + 14;
-  return L.divIcon({
-    className: '',
-    iconSize: [box, box],
-    iconAnchor: [box / 2, box / 2],
-    popupAnchor: [0, -box / 2],
-    html: `
-      <div style="position:relative;width:${box}px;height:${box}px;">
-        <div style="position:absolute;inset:5px;border-radius:50%;
-          background:${ring}22;border:2px solid ${ring};"></div>
-        <img src="${truckPng}" alt="" style="position:absolute;top:50%;left:50%;
-          width:${size * 0.72}px;height:auto;transform:translate(-50%,-50%);
-          filter:drop-shadow(0 2px 3px rgba(0,0,0,.35))
-            ${status === 'offline' ? ' grayscale(1) opacity(.55)' : ''};"/>
-      </div>`,
-  });
-};
-
-// A simple round pin for the From / To endpoints.
-const pinIcon = (color, letter) =>
-  L.divIcon({
-    className: '',
-    iconSize: [26, 26],
-    iconAnchor: [13, 26],
-    popupAnchor: [0, -24],
-    html: `
-      <div style="position:relative;width:26px;height:26px;">
-        <div style="position:absolute;left:50%;top:0;transform:translateX(-50%);
-          width:22px;height:22px;border-radius:50% 50% 50% 0;
-          background:${color};transform:translateX(-50%) rotate(-45deg);
-          border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4);"></div>
-        <span style="position:absolute;left:50%;top:3px;transform:translateX(-50%);
-          color:#fff;font:700 11px sans-serif;">${letter}</span>
-      </div>`,
-  });
-
-// Fit the map to show the whole route (or fly to the vehicle if no route).
-function FitBounds({ points }) {
-  const map = useMap();
-  useEffect(() => {
-    if (points && points.length >= 2) {
-      map.fitBounds(L.latLngBounds(points), { padding: [50, 50] });
-    } else if (points && points.length === 1) {
-      map.flyTo(points[0], 14, { duration: 0.8 });
-    }
-  }, [points, map]);
-  return null;
-}
-
-// Leaflet measures its container once, at mount. Inside this flex layout the
-// container often isn't at full width yet, so only a narrow strip of tiles loads.
-// Force a re-measure after the first paint, and again whenever the window
-// resizes, so the map always fills its box.
-function InvalidateSize() {
-  const map = useMap();
-  useEffect(() => {
-    const fix = () => map.invalidateSize();
-    // A double rAF lets the flex layout settle before we re-measure.
-    const raf = requestAnimationFrame(() => requestAnimationFrame(fix));
-    const t = setTimeout(fix, 300);
-    window.addEventListener('resize', fix);
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(t);
-      window.removeEventListener('resize', fix);
-    };
-  }, [map]);
-  return null;
-}
 
 export function TripRoutes() {
   const navigate = useNavigate();
@@ -182,11 +102,26 @@ export function TripRoutes() {
       ? [[selected.origin.lat, selected.origin.lng], [selected.destination.lat, selected.destination.lng]]
       : null;
 
-  // What FitBounds should frame: the route, plus the live vehicle if present.
+  // What the map should frame: the whole route, plus the live vehicle if it has
+  // wandered off the planned line. Google wants { lat, lng } objects.
   const framePoints = useMemo(() => {
-    if (!routePoints) return livePos ? [livePos] : null;
-    return livePos ? [...routePoints, livePos] : routePoints;
+    const pts = routePoints ? [...routePoints] : [];
+    if (livePos) pts.push(livePos);
+    if (!pts.length) return null;
+    return pts.map(([lat, lng]) => ({ lat, lng }));
   }, [routePoints, livePos]);
+
+  // The selected trip's route, in the shape GoogleFleetMap expects.
+  const mapRoute = useMemo(() => {
+    if (!selected) return null;
+    return {
+      polyline: routePoints,
+      origin: { lat: selected.origin.lat, lng: selected.origin.lng },
+      originName: selected.origin.name,
+      destination: { lat: selected.destination.lat, lng: selected.destination.lng },
+      destinationName: selected.destination.name,
+    };
+  }, [selected, routePoints]);
 
   // Arrival detection: on every poll, any still-running trip whose vehicle is
   // within ARRIVAL_RADIUS_M of its destination flips to 'completed'. We update
@@ -386,38 +321,13 @@ export function TripRoutes() {
 
           {/* ---- map -------------------------------------------------- */}
           <div className="relative min-h-[420px] flex-1 overflow-hidden rounded-xl border border-slate-200">
-            <MapContainer center={INDIA_CENTER} zoom={6} className="h-full w-full">
-              <TileLayer
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                attribution="&copy; OpenStreetMap contributors"
-              />
-              <InvalidateSize />
-              <FitBounds points={framePoints} />
-
-              {selected && routePoints && (
-                <Polyline positions={routePoints} pathOptions={{ color: '#0284c7', weight: 5, opacity: 0.8 }} />
-              )}
-
-              {selected && (
-                <>
-                  <Marker position={[selected.origin.lat, selected.origin.lng]} icon={pinIcon('#16a34a', 'A')}>
-                    <Popup><strong>From:</strong> {selected.origin.name}</Popup>
-                  </Marker>
-                  <Marker position={[selected.destination.lat, selected.destination.lng]} icon={pinIcon('#dc2626', 'B')}>
-                    <Popup><strong>To:</strong> {selected.destination.name}</Popup>
-                  </Marker>
-                </>
-              )}
-
-              {livePos && (
-                <Marker position={livePos} icon={truckIcon(liveDevice.status)}>
-                  <Popup>
-                    <strong>{liveDevice.name}</strong><br />
-                    {Math.round(liveDevice.lastPosition.speed || 0)} km/h · {timeAgo(liveDevice.lastSeenAt)}
-                  </Popup>
-                </Marker>
-              )}
-            </MapContainer>
+            {/* Only the selected trip's vehicle is plotted here — this page is
+                about one journey, not the whole fleet. */}
+            <GoogleFleetMap
+              devices={liveDevice ? [liveDevice] : []}
+              route={mapRoute}
+              fitTo={framePoints}
+            />
 
             {/* one-line From → To banner over the map (or an arrival banner) */}
             {selected && (
@@ -550,6 +460,7 @@ function NewTripModal({ devices, onClose, onCreated }) {
             value={origin}
             onSelect={setOrigin}
             icon={MapPin}
+            allowCurrentLocation
           />
           <PlaceSearchInput
             label="To"

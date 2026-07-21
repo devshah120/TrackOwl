@@ -12,6 +12,8 @@ export const apiCall = async (endpoint, options = {}) => {
     headers.Authorization = `Bearer ${token}`;
   }
 
+  // `options` is spread wholesale, so an AbortSignal passed by the caller
+  // (place autocomplete cancels in-flight searches) reaches fetch untouched.
   const response = await fetch(url, {
     ...options,
     headers,
@@ -172,52 +174,41 @@ export const notifications = {
     apiCall('/notifications/read-all', { method: 'POST' }),
 };
 
-// Geo helpers backed by the free OSM ecosystem — same map data as the Leaflet
-// tiles, no API key, no billing. These call third-party services directly from
-// the browser (not through our API), so they're grouped separately.
+// Geo helpers backed by Google Maps. These go through our own /api/geo proxy
+// rather than calling Google from the browser, so the billable API key stays on
+// the server and out of the JS bundle. The return shapes are unchanged from the
+// previous OSM implementation, so callers did not have to change.
 export const geo = {
-  // Place autocomplete via Nominatim. Returns [{ name, lat, lng }]. Nominatim
-  // asks callers to identify themselves; the browser sends a Referer, which
-  // satisfies its usage policy for light interactive use.
-  searchPlaces: async (query, { limit = 5, signal } = {}) => {
+  // Place autocomplete. Returns [{ name, lat, lng }].
+  searchPlaces: async (query, { signal } = {}) => {
     const q = query.trim();
     if (q.length < 3) return [];
-    const url = new URL('https://nominatim.openstreetmap.org/search');
-    url.search = new URLSearchParams({
-      q,
-      format: 'json',
-      limit: String(limit),
-      addressdetails: '0',
-      countrycodes: 'in', // bias to India; drop this line to search worldwide
-    }).toString();
-
-    const res = await fetch(url, { signal, headers: { 'Accept-Language': 'en' } });
-    if (!res.ok) throw new Error('Place search failed');
-    const rows = await res.json();
-    return rows.map((r) => ({
-      name: r.display_name,
-      lat: Number(r.lat),
-      lng: Number(r.lon),
-    }));
+    const res = await apiCall(`/geo/places?q=${encodeURIComponent(q)}`, { signal });
+    return res.places || [];
   },
 
-  // Road route between two { lat, lng } points via the public OSRM demo server.
-  // Returns { polyline: [[lat,lng],...], distanceKm, durationMin } or null.
+  // Reverse geocode a { lat, lng } into a named place. Turns a raw GPS fix from
+  // the browser into the same { name, lat, lng } shape searchPlaces returns.
+  // Falls back to the plain coordinates if the lookup fails, so a good GPS fix
+  // is never lost to a flaky network call.
+  reverseGeocode: async ({ lat, lng }, { signal } = {}) => {
+    try {
+      const res = await apiCall(`/geo/reverse?lat=${lat}&lng=${lng}`, { signal });
+      return res.place;
+    } catch (err) {
+      if (err.name === 'AbortError') throw err;
+      return { name: `${lat.toFixed(5)}, ${lng.toFixed(5)}`, lat, lng };
+    }
+  },
+
+  // Road route between two { lat, lng } points via the Directions API. Returns
+  // { polyline: [[lat,lng],...], distanceKm, durationMin } or null.
   getRoute: async (from, to, { signal } = {}) => {
-    const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`;
-    const url = `https://router.project-osrm.org/route/v1/driving/${coords}` +
-      `?overview=full&geometries=geojson`;
-    const res = await fetch(url, { signal });
-    if (!res.ok) throw new Error('Routing failed');
-    const data = await res.json();
-    const route = data.routes?.[0];
-    if (!route) return null;
-    return {
-      // GeoJSON is [lng, lat]; Leaflet wants [lat, lng].
-      polyline: route.geometry.coordinates.map(([lng, lat]) => [lat, lng]),
-      distanceKm: Math.round((route.distance / 1000) * 10) / 10,
-      durationMin: Math.round(route.duration / 60),
-    };
+    const params = new URLSearchParams({
+      fromLat: from.lat, fromLng: from.lng, toLat: to.lat, toLng: to.lng,
+    });
+    const res = await apiCall(`/geo/route?${params}`, { signal });
+    return res.route;
   },
 };
 
