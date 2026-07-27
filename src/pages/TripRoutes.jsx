@@ -144,15 +144,19 @@ export function TripRoutes() {
   // also stops it from influencing how the map frames the journey.
   const visibleTrail = showTrail ? trail : [];
 
-  // What the map should frame: the whole route and the driven path, plus the
-  // live vehicle if it has wandered off both. Google wants { lat, lng } objects.
+  // What the map should frame: the planned route, plus the live vehicle if it has
+  // wandered off that line. Google wants { lat, lng } objects.
+  //
+  // The driven trail is deliberately NOT included. It is the least trustworthy
+  // input on the page — one bad fix that slips past the server's filtering would
+  // stretch the bounds across a continent and shrink the actual journey to a dot.
+  // The route endpoints already define the area worth looking at.
   const framePoints = useMemo(() => {
     const pts = routePoints ? [...routePoints] : [];
-    if (visibleTrail.length) pts.push(...visibleTrail);
     if (livePos) pts.push(livePos);
     if (!pts.length) return null;
     return pts.map(([lat, lng]) => ({ lat, lng }));
-  }, [routePoints, visibleTrail, livePos]);
+  }, [routePoints, livePos]);
 
   // The selected trip's route, in the shape GoogleFleetMap expects.
   const mapRoute = useMemo(() => {

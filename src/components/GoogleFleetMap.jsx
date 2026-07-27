@@ -167,8 +167,25 @@ export function GoogleFleetMap({
     [lat, lng]
   );
 
-  // Frame an explicit set of points (Trip Routes passes the whole route plus the
-  // live vehicle so the entire journey is visible).
+  // Frame an explicit set of points (Trip Routes passes the route plus the live
+  // vehicle so the whole journey is visible).
+  //
+  // The caller rebuilds `fitTo` on every poll, so depending on the array itself
+  // would refit every few seconds and undo the user's own pan/zoom. Collapsing it
+  // to its bounding box means we only re-frame when the framed area really moves
+  // — i.e. on a new trip selection, not on each position update.
+  const fitKey = useMemo(() => {
+    if (!fitTo?.length) return null;
+    let n = -90, s = 90, e = -180, w = 180;
+    for (const p of fitTo) {
+      n = Math.max(n, p.lat); s = Math.min(s, p.lat);
+      e = Math.max(e, p.lng); w = Math.min(w, p.lng);
+    }
+    // Rounded so sub-metre GPS jitter on the live vehicle doesn't count as a
+    // change; ~4 decimals is roughly 10 m.
+    return [n, s, e, w].map((v) => v.toFixed(4)).join(',');
+  }, [fitTo]);
+
   useEffect(() => {
     if (!map || !fitTo?.length || !window.google) return;
     if (fitTo.length === 1) {
@@ -180,7 +197,8 @@ export function GoogleFleetMap({
     fitTo.forEach((p) => bounds.extend(p));
     map.fitBounds(bounds, 60);
     framedRef.current = true;
-  }, [map, fitTo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map, fitKey]);
 
   // Otherwise follow the selected vehicle.
   useEffect(() => {
