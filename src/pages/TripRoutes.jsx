@@ -50,6 +50,12 @@ export function TripRoutes() {
   const [share, setShare] = useState(null);
   const [copied, setCopied] = useState(false);
 
+  // The actual driven path for the selected trip, as [[lat, lng], ...]. Loaded
+  // per trip and refreshed on the poll while the trip is still running, so the
+  // amber trail grows behind the vehicle as it moves.
+  const [trail, setTrail] = useState([]);
+  const [showTrail, setShowTrail] = useState(true);
+
   const selectedRef = useRef(selectedId);
   selectedRef.current = selectedId;
 
@@ -96,32 +102,70 @@ export function TripRoutes() {
     ? [liveDevice.lastPosition.latitude, liveDevice.lastPosition.longitude]
     : null;
 
+  // Load the driven path whenever the selection changes, then keep it current
+  // while the trip is active. A completed trip's trail is final, so it is fetched
+  // once and left alone. `cancelled` guards against a slow response for a trip
+  // the user has already clicked away from overwriting the current one.
+  const selectedStatus = selected?.status;
+  useEffect(() => {
+    if (!selectedId) {
+      setTrail([]);
+      return;
+    }
+    let cancelled = false;
+
+    const fetchTrail = async () => {
+      try {
+        const res = await tripsApi.getTrail(selectedId);
+        if (!cancelled) setTrail(res.trail || []);
+      } catch {
+        // A missing trail is not an error worth interrupting the page for — the
+        // planned route still draws, just without the actual path over it.
+        if (!cancelled) setTrail([]);
+      }
+    };
+
+    setTrail([]);        // drop the previous trip's trail immediately
+    fetchTrail();
+
+    if (selectedStatus === 'completed') return () => { cancelled = true; };
+
+    const timer = setInterval(fetchTrail, POLL_MS);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [selectedId, selectedStatus]);
+
   const routePoints = selected?.routePolyline?.length
     ? selected.routePolyline
     : selected
       ? [[selected.origin.lat, selected.origin.lng], [selected.destination.lat, selected.destination.lng]]
       : null;
 
-  // What the map should frame: the whole route, plus the live vehicle if it has
-  // wandered off the planned line. Google wants { lat, lng } objects.
+  // The trail actually drawn: empty while the toggle is off, so turning it off
+  // also stops it from influencing how the map frames the journey.
+  const visibleTrail = showTrail ? trail : [];
+
+  // What the map should frame: the whole route and the driven path, plus the
+  // live vehicle if it has wandered off both. Google wants { lat, lng } objects.
   const framePoints = useMemo(() => {
     const pts = routePoints ? [...routePoints] : [];
+    if (visibleTrail.length) pts.push(...visibleTrail);
     if (livePos) pts.push(livePos);
     if (!pts.length) return null;
     return pts.map(([lat, lng]) => ({ lat, lng }));
-  }, [routePoints, livePos]);
+  }, [routePoints, visibleTrail, livePos]);
 
   // The selected trip's route, in the shape GoogleFleetMap expects.
   const mapRoute = useMemo(() => {
     if (!selected) return null;
     return {
       polyline: routePoints,
+      actualPath: visibleTrail,
       origin: { lat: selected.origin.lat, lng: selected.origin.lng },
       originName: selected.origin.name,
       destination: { lat: selected.destination.lat, lng: selected.destination.lng },
       destinationName: selected.destination.name,
     };
-  }, [selected, routePoints]);
+  }, [selected, routePoints, visibleTrail]);
 
   // Arrival detection: on every poll, any still-running trip whose vehicle is
   // within ARRIVAL_RADIUS_M of its destination flips to 'completed'. We update
@@ -351,6 +395,27 @@ export function TripRoutes() {
                     ) : null}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Legend for the two lines, doubling as the show/hide control for
+                the driven path. Only meaningful once there are fixes to draw. */}
+            {selected && trail.length > 1 && (
+              <div className="absolute bottom-4 left-4 z-[1000] rounded-lg bg-white/95 p-3 text-xs shadow-md backdrop-blur-sm">
+                <div className="flex items-center gap-2">
+                  <span className="h-1 w-6 shrink-0 rounded-full bg-sky-600" />
+                  <span className="text-slate-700">Planned route</span>
+                </div>
+                <label className="mt-2 flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={showTrail}
+                    onChange={(e) => setShowTrail(e.target.checked)}
+                    className="h-3.5 w-3.5 accent-amber-500"
+                  />
+                  <span className="h-1 w-6 shrink-0 rounded-full bg-amber-500" />
+                  <span className="text-slate-700">Actual path driven</span>
+                </label>
               </div>
             )}
           </div>

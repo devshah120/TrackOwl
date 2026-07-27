@@ -124,7 +124,9 @@ function MapShell({ children }) {
  * @param devices     vehicles to plot; each needs { lastPosition, status, name }
  * @param selectedId  id of the highlighted vehicle (drawn larger)
  * @param onSelect    called with a device id when its marker is clicked
- * @param route       optional { polyline, origin, destination } for Trip Routes
+ * @param route       optional { polyline, actualPath, origin, destination } for
+ *                    Trip Routes — `polyline` is the planned road route and
+ *                    `actualPath` the GPS trail of the drive that happened
  * @param fitTo       optional [{lat,lng}, ...] to frame; overrides panning
  */
 export function GoogleFleetMap({
@@ -228,10 +230,22 @@ export function GoogleFleetMap({
       onLoad={onLoad}
       onUnmount={onUnmount}
     >
+      {/* Planned route, drawn first so the actual path sits on top of it where
+          the two diverge — the real journey is the more interesting line. */}
       {route?.polyline?.length > 0 && (
         <PolylineF
           path={route.polyline.map(([lat, lng]) => ({ lat, lng }))}
           options={{ strokeColor: '#0284c7', strokeWeight: 5, strokeOpacity: 0.8 }}
+        />
+      )}
+
+      {/* The path the vehicle actually drove. Amber against the blue plan, and a
+          couple of pixels thinner, so an on-plan drive reads as one line with a
+          highlight rather than two lines fighting. Needs 2+ fixes to be a path. */}
+      {route?.actualPath?.length > 1 && (
+        <PolylineF
+          path={route.actualPath.map(([lat, lng]) => ({ lat, lng }))}
+          options={{ strokeColor: '#f59e0b', strokeWeight: 4, strokeOpacity: 0.95, zIndex: 2 }}
         />
       )}
 

@@ -2,6 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { MapPin, Loader2, X, LocateFixed } from 'lucide-react';
 import { geo } from '../services/api';
 
+// Turn a failed place lookup into something the user can act on. apiCall throws
+// { status, message }, so the HTTP status tells us whose problem it is.
+const searchErrorMessage = (err) => {
+  if (err?.status === 401) return 'Session expired — sign in again to search.';
+  if (err?.status === 503) return 'Map search is not configured on the server.';
+  if (err?.status === 502) return 'Place lookup is unavailable right now.';
+  return 'Could not search for places. Check your connection.';
+};
+
 // Turn a GeolocationPositionError into something a driver can act on.
 const geoErrorMessage = (err) => {
   if (err?.code === 1) return 'Location permission denied — allow it in your browser settings.';
@@ -29,6 +38,7 @@ export function PlaceSearchInput({
   const [busy, setBusy] = useState(false);
   const [locating, setLocating] = useState(false);
   const [locError, setLocError] = useState(null);
+  const [searchError, setSearchError] = useState(null);
   const boxRef = useRef(null);
   const abortRef = useRef(null);
 
@@ -44,6 +54,7 @@ export function PlaceSearchInput({
     // Don't re-search the text we just filled in from a selection.
     if (!q || q === value?.name) {
       setResults([]);
+      setSearchError(null);
       return;
     }
     const timer = setTimeout(async () => {
@@ -54,9 +65,16 @@ export function PlaceSearchInput({
       try {
         const rows = await geo.searchPlaces(q, { signal: controller.signal });
         setResults(rows);
+        setSearchError(rows.length ? null : 'No places found.');
         setOpen(true);
       } catch (err) {
-        if (err.name !== 'AbortError') setResults([]);
+        // An aborted request is just a newer keystroke superseding this one.
+        if (err.name === 'AbortError') return;
+        setResults([]);
+        // Distinguish "nothing matched" from "the lookup itself failed" --
+        // reporting both as an empty list made a misconfigured server look
+        // like a place that does not exist.
+        setSearchError(searchErrorMessage(err));
       } finally {
         setBusy(false);
       }
@@ -77,6 +95,7 @@ export function PlaceSearchInput({
     onSelect(place);
     setText(place.name);
     setResults([]);
+    setSearchError(null);
     setOpen(false);
   };
 
@@ -85,6 +104,7 @@ export function PlaceSearchInput({
     setText('');
     setResults([]);
     setLocError(null);
+    setSearchError(null);
   };
 
   // Ask the browser for a GPS fix, name it via reverse geocoding, and select it
@@ -162,6 +182,9 @@ export function PlaceSearchInput({
       </div>
 
       {locError && <p className="mt-1 text-xs text-red-600">{locError}</p>}
+      {!locError && searchError && !busy && (
+        <p className="mt-1 text-xs text-red-600">{searchError}</p>
+      )}
 
       {open && results.length > 0 && (
         <ul className="absolute z-[3000] mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg">

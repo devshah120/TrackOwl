@@ -111,6 +111,10 @@ export const trips = {
   update: (id, patch) =>
     apiCall(`/trips/${id}`, { method: 'PATCH', body: JSON.stringify(patch) }),
 
+  // The path the vehicle actually drove for this trip, as [[lat, lng], ...] in
+  // travel order — distinct from the planned routePolyline saved at creation.
+  getTrail: (id) => apiCall(`/trips/${id}/trail`),
+
   remove: (id) => apiCall(`/trips/${id}`, { method: 'DELETE' }),
 };
 
