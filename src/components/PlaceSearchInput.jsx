@@ -95,6 +95,10 @@ export function PlaceSearchInput({
     onSelect(place);
     setText(place.name);
     setResults([]);
+    // A successful pick supersedes any earlier geolocation failure -- without
+    // this, a denied-then-granted retry leaves the red message under a field
+    // that has just been filled in correctly.
+    setLocError(null);
     setSearchError(null);
     setOpen(false);
   };
