@@ -171,9 +171,6 @@ export function TripRoutes() {
   const routePoints = useMemo(() => {
     if (selected?.routePolyline?.length > 1) return selected.routePolyline;
     if (fetchedRoutePolyline?.length > 1) return fetchedRoutePolyline;
-    if (selected?.origin && selected?.destination) {
-      return [[selected.origin.lat, selected.origin.lng], [selected.destination.lat, selected.destination.lng]];
-    }
     return null;
   }, [selected, fetchedRoutePolyline]);
 
@@ -511,7 +508,7 @@ export function TripRoutes() {
                           <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> ~{Math.round(createRoute.durationMin / 60 * 10) / 10} h</span>
                         </span>
                       ) : (
-                        <span>Route service unavailable — a straight line will be shown.</span>
+                        <span>Route service unavailable.</span>
                       )}
                     </div>
                   )}
