@@ -846,37 +846,6 @@ export function TripRoutes() {
                   </div>
                 ) : null}
               </div>
-            ) : selected ? (
-              <div className="pointer-events-none absolute left-1/2 top-4 z-[1000] -translate-x-1/2">
-                {selected.status === 'completed' ? (
-                  <div className="flex items-center gap-2.5 rounded-full bg-green-600/95 px-4 py-2 text-sm text-white shadow-md backdrop-blur-sm">
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span className="font-medium">Arrived at {shortPlace(selected.destination.name)}</span>
-                    {actualDistanceKm != null && (
-                      <span className="ml-1 rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold text-white">
-                        Driven: {actualDistanceKm} km {actualDurationFormatted ? `(${actualDurationFormatted})` : ''}
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 rounded-full bg-white/95 px-4 py-2 text-sm shadow-md backdrop-blur-sm">
-                    <MapPin className="h-4 w-4 text-green-600" />
-                    <span className="font-medium text-slate-900">{shortPlace(selected.origin.name)}</span>
-                    <Navigation className="h-4 w-4 text-sky-500" />
-                    <Flag className="h-4 w-4 text-red-600" />
-                    <span className="font-medium text-slate-900">{shortPlace(selected.destination.name)}</span>
-                    {actualDistanceKm != null ? (
-                      <span className="ml-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 border border-amber-200">
-                        Driven: {actualDistanceKm} km {actualDurationFormatted ? `· ${actualDurationFormatted}` : ''}
-                      </span>
-                    ) : selected.distanceKm ? (
-                      <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                        {selected.distanceKm} km
-                      </span>
-                    ) : null}
-                  </div>
-                )}
-              </div>
             ) : null}
 
             {/* Legend for the two lines with actual driven path stats */}
