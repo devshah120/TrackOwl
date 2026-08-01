@@ -40,6 +40,37 @@ const ARRIVAL_RADIUS_M = 200;
 // Short first segment of a place name ("Mumbai, Maharashtra, India" → "Mumbai").
 const shortPlace = (name = '') => name.split(',')[0].trim();
 
+// Normalize polyline coordinates (handles both 2D [[lat,lng],...] and flattened 1D [lat1,lng1,lat2,lng2,...] arrays)
+const normalizePolyline = (raw) => {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  if (typeof raw[0] === 'number') {
+    const pairs = [];
+    for (let i = 0; i < raw.length - 1; i += 2) {
+      if (Number.isFinite(Number(raw[i])) && Number.isFinite(Number(raw[i + 1]))) {
+        pairs.push([Number(raw[i]), Number(raw[i + 1])]);
+      }
+    }
+    return pairs.length > 1 ? pairs : null;
+  }
+  if (Array.isArray(raw[0])) {
+    const valid = raw.filter(
+      (p) => Array.isArray(p) && p.length >= 2 && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1]))
+    ).map((p) => [Number(p[0]), Number(p[1])]);
+    return valid.length > 1 ? valid : null;
+  }
+  return null;
+};
+
+// Format planned duration in minutes/hours (e.g., 12 min or 1h 15m)
+const formatDurationMin = (mins) => {
+  if (!mins || mins <= 0) return '';
+  const totalMins = Math.round(mins);
+  if (totalMins < 60) return `~${totalMins} min`;
+  const hrs = Math.floor(totalMins / 60);
+  const remMins = totalMins % 60;
+  return remMins > 0 ? `~${hrs}h ${remMins}m` : `~${hrs}h`;
+};
+
 export function TripRoutes() {
   const navigate = useNavigate();
   const [devices, setDevices] = useState([]);
@@ -171,7 +202,7 @@ export function TripRoutes() {
   // Actual driven time duration (from start time to completion or live time)
   const actualDurationFormatted = useMemo(() => {
     if (!trail || trail.length < 2) return null;
-    const startIso = trailMeta?.startedAt || selected?.startedAt || selected?.createdAt;
+    const startIso = selected?.startedAt || trailMeta?.startedAt || selected?.createdAt;
     if (!startIso) return null;
     const startMs = new Date(startIso).getTime();
     const endIso = selected?.completedAt || trailMeta?.endedAt;
@@ -188,7 +219,8 @@ export function TripRoutes() {
 
   useEffect(() => {
     setFetchedRoutePolyline(null);
-    if (!selected || selected.routePolyline?.length > 1) return;
+    const existing = normalizePolyline(selected?.routePolyline);
+    if (!selected || existing) return;
     if (!selected.origin?.lat || !selected.destination?.lat) return;
 
     let cancelled = false;
@@ -204,10 +236,12 @@ export function TripRoutes() {
   }, [selectedId, selected?.origin, selected?.destination, selected?.routePolyline]);
 
   const routePoints = useMemo(() => {
-    if (selected?.routePolyline?.length > 1) return selected.routePolyline;
-    if (fetchedRoutePolyline?.length > 1) return fetchedRoutePolyline;
+    const fromSelected = normalizePolyline(selected?.routePolyline);
+    if (fromSelected) return fromSelected;
+    const fromFetched = normalizePolyline(fetchedRoutePolyline);
+    if (fromFetched) return fromFetched;
     return null;
-  }, [selected, fetchedRoutePolyline]);
+  }, [selected?.routePolyline, fetchedRoutePolyline]);
 
   const visibleTrail = showTrail ? trail : [];
 
@@ -540,7 +574,7 @@ export function TripRoutes() {
                       ) : createRoute ? (
                         <span className="flex items-center gap-3 font-medium text-slate-700">
                           <span className="flex items-center gap-1"><Navigation className="h-3.5 w-3.5 text-sky-500" /> {createRoute.distanceKm} km</span>
-                          <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> ~{Math.round(createRoute.durationMin / 60 * 10) / 10} h</span>
+                          <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {formatDurationMin(createRoute.durationMin)}</span>
                         </span>
                       ) : (
                         <span>Route service unavailable.</span>
@@ -634,7 +668,7 @@ export function TripRoutes() {
                               <span>
                                 {t.device?.name || 'Vehicle'}
                                 {t.distanceKm ? ` · ${t.distanceKm} km` : ''}
-                                {t.durationMin ? ` · ~${Math.round(t.durationMin / 60 * 10) / 10} h` : ''}
+                                {t.durationMin ? ` · ${formatDurationMin(t.durationMin)}` : ''}
                               </span>
                               {id === selectedId && actualDistanceKm != null && (
                                 <span className="font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded text-[11px] border border-amber-200">
@@ -842,7 +876,7 @@ export function TripRoutes() {
                   {(selected.distanceKm || selected.durationMin) && (
                     <span className="font-medium text-slate-500">
                       {selected.distanceKm ? `${selected.distanceKm} km` : ''}
-                      {selected.durationMin ? ` · ~${Math.round((selected.durationMin / 60) * 10) / 10} h` : ''}
+                      {selected.durationMin ? ` · ${formatDurationMin(selected.durationMin)}` : ''}
                     </span>
                   )}
                 </div>

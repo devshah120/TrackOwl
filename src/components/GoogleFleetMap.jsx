@@ -265,7 +265,7 @@ export function GoogleFleetMap({
       {route?.polyline?.length > 0 && (
         <PolylineF
           path={route.polyline.map(([lat, lng]) => ({ lat, lng }))}
-          options={{ strokeColor: '#0284c7', strokeWeight: 5, strokeOpacity: 0.8 }}
+          options={{ strokeColor: '#0284c7', strokeWeight: 6, strokeOpacity: 0.8, zIndex: 1 }}
         />
       )}
 
