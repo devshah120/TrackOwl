@@ -176,41 +176,48 @@ export function GoogleFleetMap({
   // would refit every few seconds and undo the user's own pan/zoom. Collapsing it
   // to its bounding box means we only re-frame when the framed area really moves
   // — i.e. on a new trip selection, not on each position update.
-  const fitKey = useMemo(() => {
-    if (!fitTo?.length) return null;
-    let n = -90, s = 90, e = -180, w = 180;
-    for (const p of fitTo) {
-      n = Math.max(n, p.lat); s = Math.min(s, p.lat);
-      e = Math.max(e, p.lng); w = Math.min(w, p.lng);
+  // Remember which trip selection has already been framed on the map.
+  // Framing happens ONCE per selection or mode change so the user's manual
+  // panning and zooming are preserved across 5-second position updates.
+  const lastFramedKeyRef = useRef(null);
+
+  const currentFramingKey = useMemo(() => {
+    if (pickingMode) {
+      return `creating_${fitTo?.length || 0}`;
     }
-    // Rounded so sub-metre GPS jitter on the live vehicle doesn't count as a
-    // change; ~4 decimals is roughly 10 m.
-    return [n, s, e, w].map((v) => v.toFixed(4)).join(',');
-  }, [fitTo]);
+    if (selectedId) {
+      const hasRoute = route?.polyline?.length > 0;
+      return `trip_${selectedId}_${hasRoute ? 'route' : 'noroute'}`;
+    }
+    return fitTo?.length ? `fit_${fitTo.length}` : null;
+  }, [selectedId, pickingMode, fitTo?.length, route?.polyline?.length]);
 
   useEffect(() => {
-    if (!map || !fitTo?.length || !window.google) return;
+    if (!map || !fitTo?.length || !window.google || !currentFramingKey) return;
+    if (lastFramedKeyRef.current === currentFramingKey) return;
+
     if (fitTo.length === 1) {
       map.panTo(fitTo[0]);
       map.setZoom(14);
-      return;
+    } else {
+      const bounds = new window.google.maps.LatLngBounds();
+      fitTo.forEach((p) => bounds.extend(p));
+      map.fitBounds(bounds, 60);
     }
-    const bounds = new window.google.maps.LatLngBounds();
-    fitTo.forEach((p) => bounds.extend(p));
-    map.fitBounds(bounds, 60);
-    framedRef.current = true;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map, fitKey]);
+    lastFramedKeyRef.current = currentFramingKey;
+  }, [map, fitTo, currentFramingKey]);
 
-  // Otherwise follow the selected vehicle.
+  // Otherwise follow the selected vehicle if fitTo is not supplied.
   useEffect(() => {
     if (!map || fitTo?.length || !selectedPos) return;
+    if (lastFramedKeyRef.current === `pos_${selectedId}`) return;
     map.panTo(selectedPos);
     if (!framedRef.current) {
       map.setZoom(15);
       framedRef.current = true;
     }
-  }, [map, selectedPos, fitTo]);
+    lastFramedKeyRef.current = `pos_${selectedId}`;
+  }, [map, selectedPos, fitTo, selectedId]);
 
   const mapOptions = useMemo(() => {
     if (!pickingMode) return MAP_OPTIONS;
