@@ -214,34 +214,47 @@ export function TripRoutes() {
     return `${h}h ${m}m`;
   }, [trail, trailMeta, selected]);
 
-  // Dynamic fetch for missing route polyline on older/existing trips
-  const [fetchedRoutePolyline, setFetchedRoutePolyline] = useState(null);
+  // Cache for dynamic route polylines fetched on trips missing stored routePolyline.
+  // Keyed by trip ID so each missing trip is fetched ONCE and never re-fetched on 5s poll ticks.
+  const [routeCache, setRouteCache] = useState({});
 
   useEffect(() => {
-    setFetchedRoutePolyline(null);
+    if (!selectedId || !selected) return;
+
     const existing = normalizePolyline(selected?.routePolyline);
-    if (!selected || existing) return;
+    if (existing) return;
+
+    if (routeCache[selectedId]) return;
+
     if (!selected.origin?.lat || !selected.destination?.lat) return;
 
     let cancelled = false;
     geo.getRoute(selected.origin, selected.destination)
       .then((r) => {
         if (!cancelled && r?.polyline?.length) {
-          setFetchedRoutePolyline(r.polyline);
+          setRouteCache((prev) => ({ ...prev, [selectedId]: r.polyline }));
         }
       })
       .catch(() => {});
 
     return () => { cancelled = true; };
-  }, [selectedId, selected?.origin, selected?.destination, selected?.routePolyline]);
+  }, [
+    selectedId,
+    selected?.origin?.lat,
+    selected?.origin?.lng,
+    selected?.destination?.lat,
+    selected?.destination?.lng,
+    selected?.routePolyline,
+    routeCache,
+  ]);
 
   const routePoints = useMemo(() => {
     const fromSelected = normalizePolyline(selected?.routePolyline);
     if (fromSelected) return fromSelected;
-    const fromFetched = normalizePolyline(fetchedRoutePolyline);
-    if (fromFetched) return fromFetched;
+    const fromCache = normalizePolyline(routeCache[selectedId]);
+    if (fromCache) return fromCache;
     return null;
-  }, [selected?.routePolyline, fetchedRoutePolyline]);
+  }, [selected?.routePolyline, routeCache, selectedId]);
 
   const visibleTrail = showTrail ? trail : [];
 
