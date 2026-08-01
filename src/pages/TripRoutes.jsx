@@ -366,15 +366,28 @@ export function TripRoutes() {
                       </div>
                       <div className="flex shrink-0 items-center gap-1">
                         {/* Start Trip button — only for planned trips */}
-                        {t.status === 'planned' && (
-                          <button
-                            onClick={(e) => startTrip(t, e)}
-                            title="Start trip"
-                            className="rounded p-1 text-green-600 transition hover:bg-green-50 hover:text-green-700"
-                          >
-                            <Play className="h-4 w-4" />
-                          </button>
-                        )}
+                        {t.status === 'planned' && (() => {
+                          const deviceId = t.device?._id || t.device?.id || t.device;
+                          const hasActiveTrip = trips.some(
+                            (other) =>
+                              (other.device?._id || other.device?.id || other.device) === deviceId &&
+                              other.status === 'active'
+                          );
+                          return (
+                            <button
+                              onClick={(e) => !hasActiveTrip && startTrip(t, e)}
+                              disabled={hasActiveTrip}
+                              title={hasActiveTrip ? "Complete current active trip on this device before starting a new one" : "Start trip"}
+                              className={`rounded p-1 transition ${
+                                hasActiveTrip
+                                  ? 'cursor-not-allowed text-slate-300'
+                                  : 'text-green-600 hover:bg-green-50 hover:text-green-700'
+                              }`}
+                            >
+                              <Play className="h-4 w-4" />
+                            </button>
+                          );
+                        })()}
                         {/* End Trip button — only for active trips */}
                         {t.status === 'active' && (
                           <button
