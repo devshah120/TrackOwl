@@ -212,6 +212,11 @@ export function GoogleFleetMap({
     }
   }, [map, selectedPos, fitTo]);
 
+  const mapOptions = useMemo(() => {
+    if (!pickingMode) return MAP_OPTIONS;
+    return { ...MAP_OPTIONS, draggableCursor: 'crosshair' };
+  }, [pickingMode]);
+
   if (!MAPS_KEY) {
     return (
       <MapShell>
@@ -240,11 +245,6 @@ export function GoogleFleetMap({
       </MapShell>
     );
   }
-
-  const mapOptions = useMemo(() => {
-    if (!pickingMode) return MAP_OPTIONS;
-    return { ...MAP_OPTIONS, draggableCursor: 'crosshair' };
-  }, [pickingMode]);
 
   return (
     <GoogleMap
