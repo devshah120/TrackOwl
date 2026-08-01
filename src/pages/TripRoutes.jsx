@@ -148,11 +148,34 @@ export function TripRoutes() {
     return () => { cancelled = true; clearInterval(timer); };
   }, [selectedId, selectedStatus]);
 
-  const routePoints = selected?.routePolyline?.length
-    ? selected.routePolyline
-    : selected
-      ? [[selected.origin.lat, selected.origin.lng], [selected.destination.lat, selected.destination.lng]]
-      : null;
+  // Dynamic fetch for missing route polyline on older/existing trips
+  const [fetchedRoutePolyline, setFetchedRoutePolyline] = useState(null);
+
+  useEffect(() => {
+    setFetchedRoutePolyline(null);
+    if (!selected || selected.routePolyline?.length > 1) return;
+    if (!selected.origin?.lat || !selected.destination?.lat) return;
+
+    let cancelled = false;
+    geo.getRoute(selected.origin, selected.destination)
+      .then((r) => {
+        if (!cancelled && r?.polyline?.length) {
+          setFetchedRoutePolyline(r.polyline);
+        }
+      })
+      .catch(() => {});
+
+    return () => { cancelled = true; };
+  }, [selectedId, selected?.origin, selected?.destination, selected?.routePolyline]);
+
+  const routePoints = useMemo(() => {
+    if (selected?.routePolyline?.length > 1) return selected.routePolyline;
+    if (fetchedRoutePolyline?.length > 1) return fetchedRoutePolyline;
+    if (selected?.origin && selected?.destination) {
+      return [[selected.origin.lat, selected.origin.lng], [selected.destination.lat, selected.destination.lng]];
+    }
+    return null;
+  }, [selected, fetchedRoutePolyline]);
 
   const visibleTrail = showTrail ? trail : [];
 
@@ -287,6 +310,9 @@ export function TripRoutes() {
         deviceId: createDeviceId,
         origin: createOrigin,
         destination: createDestination,
+        routePolyline: createRoute?.polyline,
+        distanceKm: createRoute?.distanceKm,
+        durationMin: createRoute?.durationMin,
         route: createRoute,
       });
       setTrips((prev) => [res.trip, ...prev]);
