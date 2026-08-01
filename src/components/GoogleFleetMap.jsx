@@ -135,6 +135,8 @@ export function GoogleFleetMap({
   onSelect,
   route = null,
   fitTo = null,
+  onClick,
+  pickingMode = false,
   className = 'h-full w-full',
 }) {
   const { isLoaded, loadError } = useJsApiLoader({
@@ -239,14 +241,24 @@ export function GoogleFleetMap({
     );
   }
 
+  const mapOptions = useMemo(() => {
+    if (!pickingMode) return MAP_OPTIONS;
+    return { ...MAP_OPTIONS, draggableCursor: 'crosshair' };
+  }, [pickingMode]);
+
   return (
     <GoogleMap
       mapContainerClassName={className}
       center={selectedPos || INDIA_CENTER}
       zoom={selectedPos ? 15 : 6}
-      options={MAP_OPTIONS}
+      options={mapOptions}
       onLoad={onLoad}
       onUnmount={onUnmount}
+      onClick={(e) => {
+        if (e?.latLng && onClick) {
+          onClick({ lat: e.latLng.lat(), lng: e.latLng.lng() });
+        }
+      }}
     >
       {/* Planned route, drawn first so the actual path sits on top of it where
           the two diverge — the real journey is the more interesting line. */}

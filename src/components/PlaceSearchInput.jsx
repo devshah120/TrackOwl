@@ -32,6 +32,9 @@ export function PlaceSearchInput({
   icon: Icon = MapPin,
   allowCurrentLocation = false,
   onUseCurrentLocation,
+  allowMapPick = false,
+  onPickOnMap,
+  isPickingOnMap = false,
 }) {
   const [text, setText] = useState(value?.name || '');
   const [results, setResults] = useState([]);
@@ -177,21 +180,37 @@ export function PlaceSearchInput({
     <div ref={boxRef} className="relative">
       <div className="mb-1 flex items-center justify-between gap-2">
         {label && <label className="block text-sm font-medium text-slate-700">{label}</label>}
-        {allowCurrentLocation && (
-          <button
-            type="button"
-            onClick={useCurrentLocation}
-            disabled={locating}
-            className="flex items-center gap-1 text-xs font-medium text-sky-600 transition hover:text-sky-700 disabled:opacity-50"
-          >
-            {locating ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <LocateFixed className="h-3.5 w-3.5" />
-            )}
-            {locating ? 'Locating…' : 'Use my location'}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {allowCurrentLocation && (
+            <button
+              type="button"
+              onClick={useCurrentLocation}
+              disabled={locating}
+              className="flex items-center gap-1 text-xs font-medium text-sky-600 transition hover:text-sky-700 disabled:opacity-50"
+            >
+              {locating ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <LocateFixed className="h-3.5 w-3.5" />
+              )}
+              {locating ? 'Locating…' : 'Use my location'}
+            </button>
+          )}
+          {allowMapPick && (
+            <button
+              type="button"
+              onClick={onPickOnMap}
+              className={`flex items-center gap-1 text-xs font-medium transition ${
+                isPickingOnMap
+                  ? 'rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-700 animate-pulse'
+                  : 'text-sky-600 hover:text-sky-700'
+              }`}
+            >
+              <MapPin className="h-3.5 w-3.5" />
+              {isPickingOnMap ? 'Click map…' : 'Pick on map'}
+            </button>
+          )}
+        </div>
       </div>
       <div className="relative">
         <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
