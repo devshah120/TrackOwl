@@ -553,6 +553,20 @@ function NewTripModal({ devices, onClose, onCreated }) {
     return () => { cancelled = true; controller.abort(); };
   }, [origin, destination]);
 
+  const handleUseVehicleLocation = async () => {
+    const dev = devices.find((d) => (d._id || d.id) === deviceId);
+    if (!dev) {
+      throw new Error('Please select a vehicle first.');
+    }
+    const pos = dev.lastPosition;
+    if (!pos?.latitude || !pos?.longitude) {
+      throw new Error(`No GPS location recorded for ${dev.name || 'this vehicle'} yet.`);
+    }
+    const coords = { lat: pos.latitude, lng: pos.longitude };
+    const place = await geo.reverseGeocode(coords);
+    return place;
+  };
+
   const canSubmit = deviceId && origin && destination && !busy && !routing;
 
   const submit = async (e) => {
@@ -607,6 +621,7 @@ function NewTripModal({ devices, onClose, onCreated }) {
             onSelect={setOrigin}
             icon={MapPin}
             allowCurrentLocation
+            onUseCurrentLocation={handleUseVehicleLocation}
           />
           <PlaceSearchInput
             label="To"

@@ -31,6 +31,7 @@ export function PlaceSearchInput({
   onSelect,
   icon: Icon = MapPin,
   allowCurrentLocation = false,
+  onUseCurrentLocation,
 }) {
   const [text, setText] = useState(value?.name || '');
   const [results, setResults] = useState([]);
@@ -111,36 +112,65 @@ export function PlaceSearchInput({
     setSearchError(null);
   };
 
-  // Ask the browser for a GPS fix, name it via reverse geocoding, and select it
-  // like any other place. Needs HTTPS (or localhost) — browsers block the
-  // geolocation API on plain http origins.
-  const useCurrentLocation = () => {
+  // Obtain position: either via custom handler (e.g. selected vehicle's GPS position)
+  // or via browser geolocation.
+  const useCurrentLocation = async () => {
     setLocError(null);
-    if (!navigator.geolocation) {
-      setLocError('This browser does not support location.');
-      return;
-    }
-    if (!window.isSecureContext) {
-      setLocError('Location needs a secure (https) connection.');
-      return;
-    }
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        try {
-          const place = await geo.reverseGeocode(coords);
-          pick(place);
-        } finally {
-          setLocating(false);
+    try {
+      if (onUseCurrentLocation) {
+        const res = await onUseCurrentLocation();
+        if (res) {
+          if (res.name && res.lat !== undefined && res.lng !== undefined) {
+            pick(res);
+          } else if (res.lat !== undefined && res.lng !== undefined) {
+            const place = await geo.reverseGeocode(res);
+            pick(place);
+          }
         }
-      },
-      (err) => {
-        setLocating(false);
+        return;
+      }
+
+      if (!navigator.geolocation) {
+        setLocError('This browser does not support location.');
+        return;
+      }
+      if (!window.isSecureContext) {
+        setLocError('Location needs a secure (https) connection.');
+        return;
+      }
+
+      const getPos = (options) =>
+        new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, options);
+        });
+
+      let pos;
+      try {
+        pos = await getPos({ enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 });
+      } catch (err) {
+        if (err.code === 2 || err.code === 3) {
+          pos = await getPos({ enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
+        } else {
+          throw err;
+        }
+      }
+      const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      const place = await geo.reverseGeocode(coords);
+      pick(place);
+    } catch (err) {
+      if (typeof err === 'string') {
+        setLocError(err);
+      } else if (err?.message) {
+        setLocError(err.message);
+      } else if (err?.code !== undefined) {
         setLocError(geoErrorMessage(err));
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    );
+      } else {
+        setLocError('Could not get location.');
+      }
+    } finally {
+      setLocating(false);
+    }
   };
 
   return (
