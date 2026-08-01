@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Route as RouteIcon, MapPin, Flag, Plus, Trash2, RefreshCw, AlertCircle,
   Link2, Copy, Check, Navigation, X, Clock, Loader2, CheckCircle2,
+  Play, Square,
 } from 'lucide-react';
 import { trips as tripsApi, tracking, geo } from '../services/api';
 import { PlaceSearchInput } from '../components/PlaceSearchInput';
@@ -181,7 +182,7 @@ export function TripRoutes() {
     const arrived = [];
     for (const t of trips) {
       const id = t.id || t._id;
-      if (t.status === 'completed' || arrivedFiredRef.current.has(id)) continue;
+      if (t.status === 'completed' || t.status === 'planned' || arrivedFiredRef.current.has(id)) continue;
 
       const devId = String(t.device?._id || t.device?.id || t.device);
       const dev = devices.find((d) => (d._id || d.id) === devId);
@@ -221,6 +222,37 @@ export function TripRoutes() {
       if (selectedId === id) setSelectedId(null);
     } catch (err) {
       setError(err.message || 'Could not delete trip');
+    }
+  };
+
+  // Start a planned trip: transitions to 'active' and the backend stamps
+  // startedAt so the trail window begins from this moment.
+  const startTrip = async (trip, e) => {
+    e.stopPropagation();
+    const id = trip.id || trip._id;
+    try {
+      const res = await tripsApi.update(id, { status: 'active' });
+      setTrips((prev) =>
+        prev.map((t) => ((t.id || t._id) === id ? { ...t, ...res.trip } : t))
+      );
+    } catch (err) {
+      setError(err.message || 'Could not start trip');
+    }
+  };
+
+  // End an active trip: transitions to 'completed' and the backend stamps
+  // completedAt so the trail window closes at this moment.
+  const endTrip = async (trip, e) => {
+    e.stopPropagation();
+    const id = trip.id || trip._id;
+    try {
+      const res = await tripsApi.update(id, { status: 'completed' });
+      setTrips((prev) =>
+        prev.map((t) => ((t.id || t._id) === id ? { ...t, ...res.trip } : t))
+      );
+      arrivedFiredRef.current.add(id);
+    } catch (err) {
+      setError(err.message || 'Could not end trip');
     }
   };
 
@@ -315,6 +347,16 @@ export function TripRoutes() {
                             {t.distanceKm ? ` · ${t.distanceKm} km` : ''}
                             {t.durationMin ? ` · ~${Math.round(t.durationMin / 60 * 10) / 10} h` : ''}
                           </span>
+                          {t.status === 'planned' && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                              <Clock className="h-3 w-3" /> Planned
+                            </span>
+                          )}
+                          {t.status === 'active' && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                              <Navigation className="h-3 w-3" /> In Transit
+                            </span>
+                          )}
                           {t.status === 'completed' && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700">
                               <CheckCircle2 className="h-3 w-3" /> Arrived
@@ -322,13 +364,35 @@ export function TripRoutes() {
                           )}
                         </p>
                       </div>
-                      <button
-                        onClick={(e) => removeTrip(t, e)}
-                        title="Delete trip"
-                        className="shrink-0 rounded p-1 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex shrink-0 items-center gap-1">
+                        {/* Start Trip button — only for planned trips */}
+                        {t.status === 'planned' && (
+                          <button
+                            onClick={(e) => startTrip(t, e)}
+                            title="Start trip"
+                            className="rounded p-1 text-green-600 transition hover:bg-green-50 hover:text-green-700"
+                          >
+                            <Play className="h-4 w-4" />
+                          </button>
+                        )}
+                        {/* End Trip button — only for active trips */}
+                        {t.status === 'active' && (
+                          <button
+                            onClick={(e) => endTrip(t, e)}
+                            title="End trip"
+                            className="rounded p-1 text-red-500 transition hover:bg-red-50 hover:text-red-600"
+                          >
+                            <Square className="h-4 w-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => removeTrip(t, e)}
+                          title="Delete trip"
+                          className="shrink-0 rounded p-1 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
