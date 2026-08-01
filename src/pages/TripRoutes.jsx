@@ -775,6 +775,7 @@ export function TripRoutes() {
           <div className="relative min-h-[420px] flex-1 overflow-hidden rounded-xl border border-slate-200">
             <GoogleFleetMap
               devices={creating ? devices : (liveDevice ? [liveDevice] : [])}
+              selectedId={selectedId}
               route={mapRoute}
               fitTo={framePoints}
               onClick={creating ? handleMapClick : undefined}

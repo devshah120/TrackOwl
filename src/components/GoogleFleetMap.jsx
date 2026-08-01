@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GoogleMap, MarkerF, InfoWindowF, PolylineF, useJsApiLoader } from '@react-google-maps/api';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, Navigation } from 'lucide-react';
 import truckPng from '../assets/truck-icon.png';
 import { INDIA_CENTER, STATUS_COLOR } from './mapConstants';
 
@@ -256,8 +256,8 @@ export function GoogleFleetMap({
   return (
     <GoogleMap
       mapContainerClassName={className}
-      center={selectedPos || INDIA_CENTER}
-      zoom={selectedPos ? 15 : 6}
+      defaultCenter={INDIA_CENTER}
+      defaultZoom={6}
       options={mapOptions}
       onLoad={onLoad}
       onUnmount={onUnmount}
@@ -330,6 +330,29 @@ export function GoogleFleetMap({
           </MarkerF>
         );
       })}
+      {fitTo && fitTo.length > 0 && (
+        <div className="absolute top-4 right-4 z-[10]">
+          <button
+            type="button"
+            onClick={() => {
+              if (!map || !fitTo?.length || !window.google) return;
+              if (fitTo.length === 1) {
+                map.panTo(fitTo[0]);
+                map.setZoom(14);
+              } else {
+                const bounds = new window.google.maps.LatLngBounds();
+                fitTo.forEach((p) => bounds.extend(p));
+                map.fitBounds(bounds, 60);
+              }
+            }}
+            className="flex items-center gap-1.5 rounded-lg bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-md border border-slate-200 hover:bg-slate-50 transition backdrop-blur-sm"
+            title="Recenter map view on this route"
+          >
+            <Navigation className="h-3.5 w-3.5 text-sky-600" />
+            Recenter route
+          </button>
+        </div>
+      )}
     </GoogleMap>
   );
 }
