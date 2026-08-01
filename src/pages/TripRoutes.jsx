@@ -122,10 +122,13 @@ export function TripRoutes() {
 
   // Load the driven path whenever the selection changes, then keep it current
   // while the trip is active.
+  const [trailMeta, setTrailMeta] = useState(null);
+
   const selectedStatus = selected?.status;
   useEffect(() => {
     if (!selectedId) {
       setTrail([]);
+      setTrailMeta(null);
       return;
     }
     let cancelled = false;
@@ -133,13 +136,20 @@ export function TripRoutes() {
     const fetchTrail = async () => {
       try {
         const res = await tripsApi.getTrail(selectedId);
-        if (!cancelled) setTrail(res.trail || []);
+        if (!cancelled) {
+          setTrail(res.trail || []);
+          setTrailMeta({ startedAt: res.startedAt, endedAt: res.endedAt });
+        }
       } catch {
-        if (!cancelled) setTrail([]);
+        if (!cancelled) {
+          setTrail([]);
+          setTrailMeta(null);
+        }
       }
     };
 
     setTrail([]);
+    setTrailMeta(null);
     fetchTrail();
 
     if (selectedStatus === 'completed') return () => { cancelled = true; };
@@ -147,6 +157,31 @@ export function TripRoutes() {
     const timer = setInterval(fetchTrail, POLL_MS);
     return () => { cancelled = true; clearInterval(timer); };
   }, [selectedId, selectedStatus]);
+
+  // Actual driven distance (haversine sum along GPS trail points)
+  const actualDistanceKm = useMemo(() => {
+    if (!trail || trail.length < 2) return null;
+    let meters = 0;
+    for (let i = 1; i < trail.length; i++) {
+      meters += distanceMeters(trail[i - 1], trail[i]);
+    }
+    return Math.round((meters / 1000) * 10) / 10;
+  }, [trail]);
+
+  // Actual driven time duration (from start time to completion or live time)
+  const actualDurationFormatted = useMemo(() => {
+    if (!trail || trail.length < 2) return null;
+    const startIso = trailMeta?.startedAt || selected?.startedAt || selected?.createdAt;
+    if (!startIso) return null;
+    const startMs = new Date(startIso).getTime();
+    const endIso = selected?.completedAt || trailMeta?.endedAt;
+    const endMs = endIso ? new Date(endIso).getTime() : Date.now();
+    const diffMins = Math.max(1, Math.round((endMs - startMs) / 60000));
+    if (diffMins < 60) return `${diffMins} min`;
+    const h = Math.floor(diffMins / 60);
+    const m = diffMins % 60;
+    return `${h}h ${m}m`;
+  }, [trail, trailMeta, selected]);
 
   // Dynamic fetch for missing route polyline on older/existing trips
   const [fetchedRoutePolyline, setFetchedRoutePolyline] = useState(null);
@@ -601,6 +636,11 @@ export function TripRoutes() {
                                 {t.distanceKm ? ` · ${t.distanceKm} km` : ''}
                                 {t.durationMin ? ` · ~${Math.round(t.durationMin / 60 * 10) / 10} h` : ''}
                               </span>
+                              {id === selectedId && actualDistanceKm != null && (
+                                <span className="font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded text-[11px] border border-amber-200">
+                                  Driven: {actualDistanceKm} km {actualDurationFormatted ? `(${actualDurationFormatted})` : ''}
+                                </span>
+                              )}
                               {t.status === 'planned' && (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
                                   <Clock className="h-3 w-3" /> Planned
@@ -761,9 +801,14 @@ export function TripRoutes() {
             ) : selected ? (
               <div className="pointer-events-none absolute left-1/2 top-4 z-[1000] -translate-x-1/2">
                 {selected.status === 'completed' ? (
-                  <div className="flex items-center gap-2 rounded-full bg-green-600/95 px-4 py-2 text-sm text-white shadow-md backdrop-blur-sm">
+                  <div className="flex items-center gap-2.5 rounded-full bg-green-600/95 px-4 py-2 text-sm text-white shadow-md backdrop-blur-sm">
                     <CheckCircle2 className="h-4 w-4" />
                     <span className="font-medium">Arrived at {shortPlace(selected.destination.name)}</span>
+                    {actualDistanceKm != null && (
+                      <span className="ml-1 rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold text-white">
+                        Driven: {actualDistanceKm} km {actualDurationFormatted ? `(${actualDurationFormatted})` : ''}
+                      </span>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center gap-2 rounded-full bg-white/95 px-4 py-2 text-sm shadow-md backdrop-blur-sm">
@@ -772,7 +817,11 @@ export function TripRoutes() {
                     <Navigation className="h-4 w-4 text-sky-500" />
                     <Flag className="h-4 w-4 text-red-600" />
                     <span className="font-medium text-slate-900">{shortPlace(selected.destination.name)}</span>
-                    {selected.distanceKm ? (
+                    {actualDistanceKm != null ? (
+                      <span className="ml-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 border border-amber-200">
+                        Driven: {actualDistanceKm} km {actualDurationFormatted ? `· ${actualDurationFormatted}` : ''}
+                      </span>
+                    ) : selected.distanceKm ? (
                       <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
                         {selected.distanceKm} km
                       </span>
@@ -782,23 +831,41 @@ export function TripRoutes() {
               </div>
             ) : null}
 
-            {/* Legend for the two lines */}
-            {!creating && selected && trail.length > 1 && (
-              <div className="absolute bottom-4 left-4 z-[1000] rounded-lg bg-white/95 p-3 text-xs shadow-md backdrop-blur-sm">
-                <div className="flex items-center gap-2">
-                  <span className="h-1 w-6 shrink-0 rounded-full bg-sky-600" />
-                  <span className="text-slate-700">Planned route</span>
+            {/* Legend for the two lines with actual driven path stats */}
+            {!creating && selected && (
+              <div className="absolute bottom-4 left-4 z-[1000] rounded-xl bg-white/95 p-3.5 text-xs shadow-lg backdrop-blur-sm border border-slate-200/80 space-y-2">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="h-1.5 w-6 shrink-0 rounded-full bg-sky-600" />
+                    <span className="font-semibold text-slate-800">Planned route</span>
+                  </div>
+                  {(selected.distanceKm || selected.durationMin) && (
+                    <span className="font-medium text-slate-500">
+                      {selected.distanceKm ? `${selected.distanceKm} km` : ''}
+                      {selected.durationMin ? ` · ~${Math.round((selected.durationMin / 60) * 10) / 10} h` : ''}
+                    </span>
+                  )}
                 </div>
-                <label className="mt-2 flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={showTrail}
-                    onChange={(e) => setShowTrail(e.target.checked)}
-                    className="h-3.5 w-3.5 accent-amber-500"
-                  />
-                  <span className="h-1 w-6 shrink-0 rounded-full bg-amber-500" />
-                  <span className="text-slate-700">Actual path driven</span>
-                </label>
+
+                {trail.length > 1 && (
+                  <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-2">
+                    <label className="flex cursor-pointer items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={showTrail}
+                        onChange={(e) => setShowTrail(e.target.checked)}
+                        className="h-3.5 w-3.5 accent-amber-500 rounded"
+                      />
+                      <span className="h-1.5 w-6 shrink-0 rounded-full bg-amber-500" />
+                      <span className="font-semibold text-slate-800">Actual path driven</span>
+                    </label>
+                    {actualDistanceKm != null && (
+                      <span className="font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/60">
+                        {actualDistanceKm} km {actualDurationFormatted ? `· ${actualDurationFormatted}` : ''}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
