@@ -195,6 +195,9 @@ function MapShell({ children }) {
  *                    `actualPath` the GPS trail of the drive that happened, and
  *                    `stops` the places the vehicle stood still along the way
  * @param fitTo       optional [{lat,lng}, ...] to frame; overrides panning
+ * @param fitKey      optional string identifying what `fitTo` represents, so the
+ *                    map re-frames when the subject changes (e.g. a new date)
+ *                    rather than only when the number of points does
  */
 export function GoogleFleetMap({
   devices = [],
@@ -202,6 +205,7 @@ export function GoogleFleetMap({
   onSelect,
   route = null,
   fitTo = null,
+  fitKey = null,
   onClick,
   pickingMode = false,
   className = 'h-full w-full',
@@ -256,8 +260,12 @@ export function GoogleFleetMap({
       const hasRoute = route?.polyline?.length > 0;
       return `trip_${selectedId}_${hasRoute ? 'route' : 'noroute'}`;
     }
+    // `fitKey` lets a caller say explicitly when the framed subject has changed.
+    // Point count alone is too weak for history, where two different days can
+    // hold the same number of fixes and the map would then never re-frame.
+    if (fitKey) return `key_${fitKey}`;
     return fitTo?.length ? `fit_${fitTo.length}` : null;
-  }, [selectedId, pickingMode, fitTo?.length, route?.polyline?.length]);
+  }, [selectedId, pickingMode, fitTo?.length, route?.polyline?.length, fitKey]);
 
   useEffect(() => {
     if (!map || !fitTo?.length || !window.google || !currentFramingKey) return;

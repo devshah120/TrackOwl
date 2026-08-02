@@ -256,6 +256,23 @@ export const admin = {
 };
 
 // Public (no auth): the trip behind a share token, for the client map page.
+// Day-by-day movement history for one GPS device: where it drove, where it held
+// and for how long, and distance covered. Distinct from `trips.getTrail`, which
+// is scoped to a single planned job rather than a calendar day.
+//
+// The browser's timezone offset goes with every call so a "day" means the
+// operator's local day — without it an IST fleet's early-morning running is
+// filed under the previous date.
+export const history = {
+  day: (deviceId, date) =>
+    apiCall(`/history/${deviceId}?date=${date}&tz=${new Date().getTimezoneOffset()}`),
+
+  summary: (deviceId, from, to) =>
+    apiCall(
+      `/history/${deviceId}/summary?from=${from}&to=${to}&tz=${new Date().getTimezoneOffset()}`
+    ),
+};
+
 export const publicTrip = (token) => apiCall(`/trips/public/${token}`);
 
 export const setAuthToken = (token) => {

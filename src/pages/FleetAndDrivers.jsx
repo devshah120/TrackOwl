@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, Filter, ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell, Phone, AlertCircle } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Filter, ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell, Phone, AlertCircle, History } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { Topbar } from '../components/Topbar';
 import { fleet } from '../services/api';
+import { TruckHistory } from '../components/TruckHistory';
 
 export function FleetAndDrivers() {
   const navigate = useNavigate();
@@ -208,6 +209,17 @@ export function FleetAndDrivers() {
               <AlertCircle className="w-4 h-4" />
               Alerts & Maintenance
             </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`px-4 py-3 font-medium transition-colors flex items-center gap-2 ${
+                activeTab === 'history'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <History className="w-4 h-4" />
+              Travel History
+            </button>
           </div>
 
           {loading && (
@@ -296,6 +308,11 @@ export function FleetAndDrivers() {
               </div>
             </div>
           )}
+
+          {/* Travel History Tab. Not gated on `loading`, which tracks the truck
+              roster — history is keyed off GPS devices and would otherwise sit
+              blank waiting on an unrelated fetch. */}
+          {activeTab === 'history' && <TruckHistory />}
 
           {/* Alerts Tab */}
           {!loading && activeTab === 'alerts' && (
