@@ -202,7 +202,9 @@ export function TripRoutes() {
   // Actual driven time duration (from start time to completion or live time)
   const actualDurationFormatted = useMemo(() => {
     if (!trail || trail.length < 2) return null;
-    const startIso = selected?.startedAt || trailMeta?.startedAt || selected?.createdAt;
+    // Measured from the start click only — never from createdAt, which would
+    // count the hours a trip sat planned as though they were time on the road.
+    const startIso = selected?.startedAt || trailMeta?.startedAt;
     if (!startIso) return null;
     const startMs = new Date(startIso).getTime();
     const endIso = selected?.completedAt || trailMeta?.endedAt;
