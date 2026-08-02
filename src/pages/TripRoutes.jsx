@@ -819,6 +819,17 @@ export function TripRoutes() {
                               <span className="ml-1.5 font-semibold text-amber-700">
                                 {formatStopDuration(s.durationMs)}
                               </span>
+                              {/* The tracker went quiet rather than reporting
+                                  from a standstill, so the duration is bounded
+                                  by the silence, not watched throughout. */}
+                              {s.inferred && (
+                                <span
+                                  className="ml-1.5 text-slate-400"
+                                  title="No GPS reports during this period — duration inferred from the gap between fixes"
+                                >
+                                  · no signal
+                                </span>
+                              )}
                             </p>
                           </div>
                         </li>

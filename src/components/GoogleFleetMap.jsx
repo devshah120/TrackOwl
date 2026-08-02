@@ -366,6 +366,11 @@ export function GoogleFleetMap({
                   <div className="mt-0.5 text-slate-500">
                     {formatClock(s.startedAt)} – {formatClock(s.endedAt)}
                   </div>
+                  {s.inferred && (
+                    <div className="mt-0.5 text-[11px] text-slate-400">
+                      No GPS reports in this period — duration inferred from the gap
+                    </div>
+                  )}
                 </div>
               </InfoWindowF>
             )}
