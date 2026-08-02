@@ -148,24 +148,6 @@ export function TruckHistory() {
           />
         </div>
 
-        <div className="flex gap-1.5">
-          {[
-            { label: 'Today', v: toDateInput(new Date()) },
-            { label: 'Yesterday', v: daysAgo(1) },
-          ].map((q) => (
-            <button
-              key={q.label}
-              onClick={() => setDate(q.v)}
-              className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
-                date === q.v
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                  : 'border-slate-300 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              {q.label}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* ---- day summary tiles ------------------------------------------- */}
