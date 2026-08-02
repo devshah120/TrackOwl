@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GoogleMap, MarkerF, InfoWindowF, PolylineF, useJsApiLoader } from '@react-google-maps/api';
 import { Loader2, AlertCircle, Navigation } from 'lucide-react';
-import truckPng from '../assets/truck-icon.png';
+// Imported with `?inline` so Vite hands back a base64 data URI rather than a
+// URL. The marker below is itself a data: URI, and an <image> inside one cannot
+// fetch an external file — the browser treats it as an opaque origin, so a URL
+// here silently renders the badge with no truck in it. The asset is a trimmed
+// 64px copy of the art, small enough that inlining costs almost nothing.
+import truckPng from '../assets/truck-marker.png?inline';
 import { INDIA_CENTER, STATUS_COLOR } from './mapConstants';
 
 // Shared Google Maps layer for every fleet screen (Live Tracking, Trip Routes,
@@ -46,6 +51,11 @@ const MAP_OPTIONS = {
 // The truck art is a 3/4 perspective render, so it is deliberately NOT rotated —
 // spinning it would read as the vehicle tipping over. Heading is shown by the
 // arrow orbiting the ring instead.
+// How much of the badge width the truck art fills. The asset is trimmed to its
+// opaque bounds, so this is the real drawn size — art with its own transparent
+// padding would need a smaller number to look the same.
+const TRUCK_SCALE = 0.86;
+
 const truckIconUrl = (status, course = 0, selected = false) => {
   const size = selected ? 52 : 42;
   const ring = STATUS_COLOR[status] || STATUS_COLOR.offline;
@@ -61,13 +71,16 @@ const truckIconUrl = (status, course = 0, selected = false) => {
       : '';
 
   const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${box}" height="${box}" viewBox="0 0 ${box} ${box}">
+    <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+         width="${box}" height="${box}" viewBox="0 0 ${box} ${box}">
       <circle cx="${c}" cy="${c}" r="${c - 6}" fill="${ring}" fill-opacity="0.13"
               stroke="${ring}" stroke-width="2"/>
       ${status === 'moving' ? `<circle cx="${c}" cy="${c}" r="${c - 3}" fill="${ring}" fill-opacity="0.2"/>` : ''}
       ${arrow}
-      <image href="${truckPng}" x="${c - (size * 0.72) / 2}" y="${c - (size * 0.72) / 2}"
-             width="${size * 0.72}" height="${size * 0.72}"
+      <image href="${truckPng}" xlink:href="${truckPng}"
+             x="${c - (size * TRUCK_SCALE) / 2}" y="${c - (size * TRUCK_SCALE) / 2}"
+             width="${size * TRUCK_SCALE}" height="${size * TRUCK_SCALE}"
+             preserveAspectRatio="xMidYMid meet"
              opacity="${dim ? 0.55 : 1}"/>
     </svg>`;
 
