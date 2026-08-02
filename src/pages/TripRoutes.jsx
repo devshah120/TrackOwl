@@ -61,6 +61,21 @@ const normalizePolyline = (raw) => {
   return null;
 };
 
+// Format a stop's duration from milliseconds (e.g. 8m or 2h 14m). Stops are
+// reported in whole minutes — second-level precision on a parking spell reads
+// as false accuracy given GPS reports every few seconds.
+const formatStopDuration = (ms) => {
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+};
+
+// Clock time of a stop, e.g. "2:45 PM".
+const formatClock = (iso) =>
+  new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
 // Format planned duration in minutes/hours (e.g., 12 min or 1h 15m)
 const formatDurationMin = (mins) => {
   if (!mins || mins <= 0) return '';
@@ -98,6 +113,11 @@ export function TripRoutes() {
   // amber trail grows behind the vehicle as it moves.
   const [trail, setTrail] = useState([]);
   const [showTrail, setShowTrail] = useState(true);
+
+  // Places the vehicle stood still during the selected trip, with how long it
+  // sat at each. Detected server-side from the same GPS fixes as the trail.
+  const [stops, setStops] = useState([]);
+  const [showStops, setShowStops] = useState(true);
 
   const selectedRef = useRef(selectedId);
   selectedRef.current = selectedId;
@@ -159,6 +179,7 @@ export function TripRoutes() {
   useEffect(() => {
     if (!selectedId) {
       setTrail([]);
+      setStops([]);
       setTrailMeta(null);
       return;
     }
@@ -169,17 +190,20 @@ export function TripRoutes() {
         const res = await tripsApi.getTrail(selectedId);
         if (!cancelled) {
           setTrail(res.trail || []);
+          setStops(res.stops || []);
           setTrailMeta({ startedAt: res.startedAt, endedAt: res.endedAt });
         }
       } catch {
         if (!cancelled) {
           setTrail([]);
+          setStops([]);
           setTrailMeta(null);
         }
       }
     };
 
     setTrail([]);
+    setStops([]);
     setTrailMeta(null);
     fetchTrail();
 
@@ -259,6 +283,14 @@ export function TripRoutes() {
   }, [selected?.routePolyline, routeCache, selectedId]);
 
   const visibleTrail = showTrail ? trail : [];
+  const visibleStops = showStops ? stops : [];
+
+  // Total time parked across the trip — the single number that explains a gap
+  // between planned and actual duration.
+  const totalIdleMs = useMemo(
+    () => stops.reduce((sum, s) => sum + (s.durationMs || 0), 0),
+    [stops]
+  );
 
   const framePoints = useMemo(() => {
     if (creating) {
@@ -289,12 +321,13 @@ export function TripRoutes() {
     return {
       polyline: routePoints,
       actualPath: visibleTrail,
+      stops: visibleStops,
       origin: { lat: selected.origin.lat, lng: selected.origin.lng },
       originName: selected.origin.name,
       destination: { lat: selected.destination.lat, lng: selected.destination.lng },
       destinationName: selected.destination.name,
     };
-  }, [creating, createRoute, createOrigin, createDestination, selected, routePoints, visibleTrail]);
+  }, [creating, createRoute, createOrigin, createDestination, selected, routePoints, visibleTrail, visibleStops]);
 
   // Recompute the road route whenever both endpoints are set during creation.
   useEffect(() => {
@@ -753,6 +786,47 @@ export function TripRoutes() {
                   })}
                 </div>
 
+                {/* Stops along the selected trip. This is what explains a run
+                    planned for minutes that took hours — each entry is a place
+                    the vehicle sat, with how long it sat there. */}
+                {selected && stops.length > 0 && (
+                  <div className="border-t border-slate-200">
+                    <div className="flex items-center justify-between px-4 pt-3 pb-2">
+                      <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                        <Clock className="h-4 w-4 text-amber-600" />
+                        Stops ({stops.length})
+                      </h3>
+                      <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                        {formatStopDuration(totalIdleMs)} idle
+                      </span>
+                    </div>
+
+                    <ul className="max-h-56 overflow-y-auto px-4 pb-3">
+                      {stops.map((s, i) => (
+                        <li
+                          key={`${s.startedAt}-${i}`}
+                          className="flex gap-2.5 border-b border-slate-100 py-2 last:border-b-0"
+                        >
+                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
+                            {i + 1}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-medium text-slate-800" title={s.address}>
+                              {s.address || `${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}`}
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-slate-500">
+                              {formatClock(s.startedAt)} – {formatClock(s.endedAt)}
+                              <span className="ml-1.5 font-semibold text-amber-700">
+                                {formatStopDuration(s.durationMs)}
+                              </span>
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {selected && (
                   <div className="border-t border-slate-200 p-4">
                     <button
@@ -883,6 +957,26 @@ export function TripRoutes() {
                         {actualDistanceKm} km {actualDurationFormatted ? `· ${actualDurationFormatted}` : ''}
                       </span>
                     )}
+                  </div>
+                )}
+
+                {stops.length > 0 && (
+                  <div className="flex items-center justify-between gap-4 border-t border-slate-100 pt-2">
+                    <label className="flex cursor-pointer items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={showStops}
+                        onChange={(e) => setShowStops(e.target.checked)}
+                        className="h-3.5 w-3.5 accent-amber-600 rounded"
+                      />
+                      <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-amber-600 text-[8px] font-bold text-white">
+                        1
+                      </span>
+                      <span className="font-semibold text-slate-800">Stops</span>
+                    </label>
+                    <span className="font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/60">
+                      {stops.length} · {formatStopDuration(totalIdleMs)} idle
+                    </span>
                   </div>
                 )}
               </div>

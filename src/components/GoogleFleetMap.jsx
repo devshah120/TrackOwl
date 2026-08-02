@@ -99,6 +99,33 @@ const pinIconUrl = (color, letter) => {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg.trim())}`;
 };
 
+// Stop duration in whole minutes (e.g. "8m", "2h 14m") and the clock time of a
+// stop. Kept here rather than imported so the map stays usable on its own.
+const formatStopDuration = (ms) => {
+  const mins = Math.round((ms || 0) / 60000);
+  if (mins < 60) return `${mins}m`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+};
+
+const formatClock = (iso) =>
+  iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+
+// A stop marker: numbered in travel order so it maps onto the sidebar list.
+// Drawn as a circle rather than a teardrop pin because a stop marks an area the
+// vehicle sat within, not the single precise point an endpoint pin claims.
+const stopIconUrl = (label) => {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">
+      <circle cx="15" cy="15" r="13" fill="#b45309" fill-opacity="0.18"/>
+      <circle cx="15" cy="15" r="9.5" fill="#d97706" stroke="#fff" stroke-width="2.5"/>
+      <text x="15" y="19" text-anchor="middle" font-family="sans-serif"
+            font-size="10" font-weight="700" fill="#fff">${label}</text>
+    </svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg.trim())}`;
+};
+
 // Google's Size/Point constructors only exist once the script has loaded, so
 // icon objects are built inside components rather than at module scope.
 const useIcons = (loaded) =>
@@ -119,6 +146,11 @@ const useIcons = (loaded) =>
         scaledSize: new Size(28, 36),
         anchor: new Point(14, 35),
       }),
+      stop: (label) => ({
+        url: stopIconUrl(label),
+        scaledSize: new Size(30, 30),
+        anchor: new Point(15, 15),
+      }),
     };
   }, [loaded]);
 
@@ -137,9 +169,10 @@ function MapShell({ children }) {
  * @param devices     vehicles to plot; each needs { lastPosition, status, name }
  * @param selectedId  id of the highlighted vehicle (drawn larger)
  * @param onSelect    called with a device id when its marker is clicked
- * @param route       optional { polyline, actualPath, origin, destination } for
- *                    Trip Routes — `polyline` is the planned road route and
- *                    `actualPath` the GPS trail of the drive that happened
+ * @param route       optional { polyline, actualPath, stops, origin, destination }
+ *                    for Trip Routes — `polyline` is the planned road route,
+ *                    `actualPath` the GPS trail of the drive that happened, and
+ *                    `stops` the places the vehicle stood still along the way
  * @param fitTo       optional [{lat,lng}, ...] to frame; overrides panning
  */
 export function GoogleFleetMap({
@@ -309,6 +342,36 @@ export function GoogleFleetMap({
           title={route.destinationName}
         />
       )}
+
+      {/* Where the vehicle stood still. Drawn above both routes so a stop on
+          top of the driven line stays clickable, but below the truck so the
+          live vehicle is never hidden behind a pin from earlier in the trip. */}
+      {route?.stops?.map((s, i) => {
+        const id = `stop-${i}`;
+        const position = { lat: s.lat, lng: s.lng };
+        return (
+          <MarkerF
+            key={id}
+            position={position}
+            icon={icons.stop(String(i + 1))}
+            zIndex={3}
+            title={`Stop ${i + 1}${s.address ? ` — ${s.address}` : ''}`}
+            onClick={() => setOpenId(id)}
+          >
+            {openId === id && (
+              <InfoWindowF position={position} onCloseClick={() => setOpenId(null)}>
+                <div className="max-w-[220px] text-sm">
+                  <strong>Stop {i + 1} · {formatStopDuration(s.durationMs)}</strong>
+                  {s.address && <div className="mt-0.5 text-slate-600">{s.address}</div>}
+                  <div className="mt-0.5 text-slate-500">
+                    {formatClock(s.startedAt)} – {formatClock(s.endedAt)}
+                  </div>
+                </div>
+              </InfoWindowF>
+            )}
+          </MarkerF>
+        );
+      })}
 
       {devices.map((d) => {
         if (!d.lastPosition?.latitude) return null;
