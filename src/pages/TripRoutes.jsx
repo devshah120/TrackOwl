@@ -119,6 +119,11 @@ export function TripRoutes() {
   const [stops, setStops] = useState([]);
   const [showStops, setShowStops] = useState(true);
 
+  // Periods the trip was running but the device reported nothing. Not stops —
+  // the vehicle's behaviour during them is unknown — but shown so a trip that
+  // lost its tracker doesn't read as a confident short journey.
+  const [coverage, setCoverage] = useState(null);
+
   const selectedRef = useRef(selectedId);
   selectedRef.current = selectedId;
 
@@ -180,6 +185,7 @@ export function TripRoutes() {
     if (!selectedId) {
       setTrail([]);
       setStops([]);
+      setCoverage(null);
       setTrailMeta(null);
       return;
     }
@@ -191,12 +197,14 @@ export function TripRoutes() {
         if (!cancelled) {
           setTrail(res.trail || []);
           setStops(res.stops || []);
+          setCoverage(res.coverage || null);
           setTrailMeta({ startedAt: res.startedAt, endedAt: res.endedAt });
         }
       } catch {
         if (!cancelled) {
           setTrail([]);
           setStops([]);
+          setCoverage(null);
           setTrailMeta(null);
         }
       }
@@ -204,6 +212,7 @@ export function TripRoutes() {
 
     setTrail([]);
     setStops([]);
+    setCoverage(null);
     setTrailMeta(null);
     fetchTrail();
 
@@ -292,6 +301,27 @@ export function TripRoutes() {
     [stops]
   );
 
+  const untrackedMs = coverage?.untrackedMs || 0;
+  const untrackedGaps = showStops ? (coverage?.gaps || []) : [];
+
+  // How the trip's whole duration divides up. Shown because the three parts
+  // answer different questions: driving time is performance, idle is delay, and
+  // untracked is simply unknown — and lumping the last into either would state
+  // as fact something the GPS data cannot support.
+  const timeBudget = useMemo(() => {
+    const startIso = selected?.startedAt || trailMeta?.startedAt;
+    if (!startIso) return null;
+    const endMs = selected?.completedAt
+      ? new Date(selected.completedAt).getTime()
+      : Date.now();
+    const totalMs = endMs - new Date(startIso).getTime();
+    if (totalMs <= 0) return null;
+    // Whatever is left once idle and untracked are taken out is time the
+    // vehicle was tracked and not stationary.
+    const movingMs = Math.max(0, totalMs - totalIdleMs - untrackedMs);
+    return { totalMs, movingMs, idleMs: totalIdleMs, untrackedMs };
+  }, [selected, trailMeta, totalIdleMs, untrackedMs]);
+
   const framePoints = useMemo(() => {
     if (creating) {
       const pts = [];
@@ -322,12 +352,13 @@ export function TripRoutes() {
       polyline: routePoints,
       actualPath: visibleTrail,
       stops: visibleStops,
+      untracked: untrackedGaps,
       origin: { lat: selected.origin.lat, lng: selected.origin.lng },
       originName: selected.origin.name,
       destination: { lat: selected.destination.lat, lng: selected.destination.lng },
       destinationName: selected.destination.name,
     };
-  }, [creating, createRoute, createOrigin, createDestination, selected, routePoints, visibleTrail, visibleStops]);
+  }, [creating, createRoute, createOrigin, createDestination, selected, routePoints, visibleTrail, visibleStops, untrackedGaps]);
 
   // Recompute the road route whenever both endpoints are set during creation.
   useEffect(() => {
@@ -786,6 +817,75 @@ export function TripRoutes() {
                   })}
                 </div>
 
+                {/* How the trip's elapsed time actually divides up. Driving,
+                    waiting, and unknown are three different answers, and a
+                    single "5h 5m" hides which one applies. */}
+                {selected && timeBudget && (stops.length > 0 || untrackedMs > 0) && (
+                  <div className="border-t border-slate-200 px-4 pt-3 pb-2">
+                    <h3 className="mb-2 text-sm font-semibold text-slate-900">
+                      Time breakdown · {formatStopDuration(timeBudget.totalMs)}
+                    </h3>
+
+                    <div className="flex h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="bg-sky-500"
+                        style={{ width: `${(timeBudget.movingMs / timeBudget.totalMs) * 100}%` }}
+                      />
+                      <div
+                        className="bg-amber-500"
+                        style={{ width: `${(timeBudget.idleMs / timeBudget.totalMs) * 100}%` }}
+                      />
+                      <div
+                        className="bg-slate-300"
+                        style={{ width: `${(timeBudget.untrackedMs / timeBudget.totalMs) * 100}%` }}
+                      />
+                    </div>
+
+                    <div className="mt-2 space-y-1 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1.5 text-slate-600">
+                          <span className="h-2 w-2 rounded-full bg-sky-500" /> Moving
+                        </span>
+                        <span className="font-semibold text-slate-700">
+                          {formatStopDuration(timeBudget.movingMs)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1.5 text-slate-600">
+                          <span className="h-2 w-2 rounded-full bg-amber-500" /> Idle at stops
+                        </span>
+                        <span className="font-semibold text-amber-700">
+                          {formatStopDuration(timeBudget.idleMs)}
+                        </span>
+                      </div>
+                      {timeBudget.untrackedMs > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 text-slate-600">
+                            <span className="h-2 w-2 rounded-full bg-slate-300" /> No tracking data
+                          </span>
+                          <span className="font-semibold text-slate-500">
+                            {formatStopDuration(timeBudget.untrackedMs)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Say plainly when most of the trip is unaccounted for —
+                        the distance and duration above are only as good as the
+                        coverage behind them. */}
+                    {timeBudget.untrackedMs > timeBudget.totalMs * 0.2 && (
+                      <p className="mt-2 flex gap-1.5 rounded-lg bg-slate-50 p-2 text-[11px] leading-snug text-slate-600">
+                        <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0 text-slate-400" />
+                        <span>
+                          The device stopped reporting for{' '}
+                          <strong>{formatStopDuration(timeBudget.untrackedMs)}</strong> of this
+                          trip, so the distance and stops below cover only part of it.
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Stops along the selected trip. This is what explains a run
                     planned for minutes that took hours — each entry is a place
                     the vehicle sat, with how long it sat there. */}
@@ -830,6 +930,45 @@ export function TripRoutes() {
                                   · no signal
                                 </span>
                               )}
+                            </p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Blind spots, listed separately from stops so the two are
+                    never read as the same kind of fact. */}
+                {selected && coverage?.gaps?.length > 0 && (
+                  <div className="border-t border-slate-200 px-4 pt-3 pb-3">
+                    <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                      <AlertCircle className="h-4 w-4 text-slate-400" />
+                      No tracking data ({coverage.gaps.length})
+                    </h3>
+                    <ul>
+                      {coverage.gaps.map((g, i) => (
+                        <li
+                          key={`${g.startedAt}-${i}`}
+                          className="flex gap-2.5 border-b border-slate-100 py-2 last:border-b-0"
+                        >
+                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-300 text-[10px] font-bold text-white">
+                            ?
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-medium text-slate-700" title={g.address}>
+                              {g.address || `${g.lat.toFixed(5)}, ${g.lng.toFixed(5)}`}
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-slate-500">
+                              {formatClock(g.startedAt)} – {formatClock(g.endedAt)}
+                              <span className="ml-1.5 font-semibold text-slate-500">
+                                {formatStopDuration(g.durationMs)}
+                              </span>
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-slate-400">
+                              {g.position === 'end'
+                                ? 'Device stopped reporting here'
+                                : 'Device not reporting at trip start'}
                             </p>
                           </div>
                         </li>

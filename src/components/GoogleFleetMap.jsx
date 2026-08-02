@@ -126,6 +126,22 @@ const stopIconUrl = (label) => {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg.trim())}`;
 };
 
+// Where contact with the tracker was lost. Deliberately grey and marked "?"
+// rather than numbered like a stop: we know the vehicle was here when reporting
+// stopped, but not what it did next. A coloured pin would imply the same
+// confidence as an observed halt, which is exactly the claim we cannot make.
+const untrackedIconUrl = () => {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">
+      <circle cx="15" cy="15" r="13" fill="#64748b" fill-opacity="0.15"/>
+      <circle cx="15" cy="15" r="9.5" fill="#94a3b8" stroke="#fff" stroke-width="2.5"
+              stroke-dasharray="3 2"/>
+      <text x="15" y="19" text-anchor="middle" font-family="sans-serif"
+            font-size="11" font-weight="700" fill="#fff">?</text>
+    </svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg.trim())}`;
+};
+
 // Google's Size/Point constructors only exist once the script has loaded, so
 // icon objects are built inside components rather than at module scope.
 const useIcons = (loaded) =>
@@ -148,6 +164,11 @@ const useIcons = (loaded) =>
       }),
       stop: (label) => ({
         url: stopIconUrl(label),
+        scaledSize: new Size(30, 30),
+        anchor: new Point(15, 15),
+      }),
+      untracked: () => ({
+        url: untrackedIconUrl(),
         scaledSize: new Size(30, 30),
         anchor: new Point(15, 15),
       }),
@@ -371,6 +392,40 @@ export function GoogleFleetMap({
                       No GPS reports in this period — duration inferred from the gap
                     </div>
                   )}
+                </div>
+              </InfoWindowF>
+            )}
+          </MarkerF>
+        );
+      })}
+
+      {/* Where the tracker fell silent. Same layer as stops, but never numbered
+          alongside them — these mark absence of data, not an observed halt. */}
+      {route?.untracked?.map((g, i) => {
+        const id = `untracked-${i}`;
+        const position = { lat: g.lat, lng: g.lng };
+        return (
+          <MarkerF
+            key={id}
+            position={position}
+            icon={icons.untracked()}
+            zIndex={3}
+            title={`No tracking data — ${formatStopDuration(g.durationMs)}`}
+            onClick={() => setOpenId(id)}
+          >
+            {openId === id && (
+              <InfoWindowF position={position} onCloseClick={() => setOpenId(null)}>
+                <div className="max-w-[230px] text-sm">
+                  <strong>No tracking data · {formatStopDuration(g.durationMs)}</strong>
+                  <div className="mt-0.5 text-slate-600">
+                    {g.position === 'end'
+                      ? 'Last known position before the device stopped reporting.'
+                      : 'The device was not reporting when the trip began.'}
+                  </div>
+                  {g.address && <div className="mt-0.5 text-slate-500">{g.address}</div>}
+                  <div className="mt-0.5 text-slate-500">
+                    {formatClock(g.startedAt)} – {formatClock(g.endedAt)}
+                  </div>
                 </div>
               </InfoWindowF>
             )}
