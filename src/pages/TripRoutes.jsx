@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Route as RouteIcon, MapPin, Flag, Plus, Trash2, RefreshCw, AlertCircle,
   Link2, Copy, Check, Navigation, X, Clock, Loader2, CheckCircle2,
-  Play, Square,
+  Play, Square, WifiOff,
 } from 'lucide-react';
 import { trips as tripsApi, tracking, geo } from '../services/api';
 import { PlaceSearchInput } from '../components/PlaceSearchInput';
@@ -703,7 +703,11 @@ export function TripRoutes() {
                   </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto">
+                {/* The trip list must always keep a usable slice of the
+                    sidebar. The detail panels below grow with the selected
+                    trip's stops and offline periods, and without a floor here
+                    they push the list itself out of view. */}
+                <div className="min-h-[9rem] flex-1 overflow-y-auto">
                   {loading && (
                     <p className="flex items-center gap-2 p-4 text-sm text-slate-500">
                       <RefreshCw className="h-4 w-4 animate-spin" /> Loading trips…
@@ -817,6 +821,11 @@ export function TripRoutes() {
                   })}
                 </div>
 
+                {/* Detail for the selected trip. Capped and independently
+                    scrollable so a trip with many stops can never crowd the
+                    list above it off the screen. */}
+                <div className="max-h-[55%] shrink-0 overflow-y-auto">
+
                 {/* How the trip's elapsed time actually divides up. Driving,
                     waiting, and unknown are three different answers, and a
                     single "5h 5m" hides which one applies. */}
@@ -861,7 +870,7 @@ export function TripRoutes() {
                       {timeBudget.untrackedMs > 0 && (
                         <div className="flex items-center justify-between">
                           <span className="flex items-center gap-1.5 text-slate-600">
-                            <span className="h-2 w-2 rounded-full bg-slate-300" /> No tracking data
+                            <span className="h-2 w-2 rounded-full bg-slate-300" /> Device offline
                           </span>
                           <span className="font-semibold text-slate-500">
                             {formatStopDuration(timeBudget.untrackedMs)}
@@ -874,10 +883,10 @@ export function TripRoutes() {
                         the distance and duration above are only as good as the
                         coverage behind them. */}
                     {timeBudget.untrackedMs > timeBudget.totalMs * 0.2 && (
-                      <p className="mt-2 flex gap-1.5 rounded-lg bg-slate-50 p-2 text-[11px] leading-snug text-slate-600">
-                        <AlertCircle className="mt-px h-3.5 w-3.5 shrink-0 text-slate-400" />
+                      <p className="mt-2 flex gap-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2 text-[11px] leading-snug text-slate-600">
+                        <WifiOff className="mt-px h-3.5 w-3.5 shrink-0 text-slate-400" />
                         <span>
-                          The device stopped reporting for{' '}
+                          The device was offline for{' '}
                           <strong>{formatStopDuration(timeBudget.untrackedMs)}</strong> of this
                           trip, so the distance and stops below cover only part of it.
                         </span>
@@ -901,7 +910,7 @@ export function TripRoutes() {
                       </span>
                     </div>
 
-                    <ul className="max-h-56 overflow-y-auto px-4 pb-3">
+                    <ul className="px-4 pb-3">
                       {stops.map((s, i) => (
                         <li
                           key={`${s.startedAt}-${i}`}
@@ -925,9 +934,9 @@ export function TripRoutes() {
                               {s.inferred && (
                                 <span
                                   className="ml-1.5 text-slate-400"
-                                  title="No GPS reports during this period — duration inferred from the gap between fixes"
+                                  title="Device was offline during this period — duration inferred from the gap between fixes"
                                 >
-                                  · no signal
+                                  · device offline
                                 </span>
                               )}
                             </p>
@@ -942,18 +951,23 @@ export function TripRoutes() {
                     never read as the same kind of fact. */}
                 {selected && coverage?.gaps?.length > 0 && (
                   <div className="border-t border-slate-200 px-4 pt-3 pb-3">
-                    <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-900">
-                      <AlertCircle className="h-4 w-4 text-slate-400" />
-                      No tracking data ({coverage.gaps.length})
-                    </h3>
+                    <div className="mb-2 flex items-center justify-between">
+                      <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                        <WifiOff className="h-4 w-4 text-slate-400" />
+                        Offline device ({coverage.gaps.length})
+                      </h3>
+                      <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                        {formatStopDuration(untrackedMs)} offline
+                      </span>
+                    </div>
                     <ul>
                       {coverage.gaps.map((g, i) => (
                         <li
                           key={`${g.startedAt}-${i}`}
                           className="flex gap-2.5 border-b border-slate-100 py-2 last:border-b-0"
                         >
-                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-300 text-[10px] font-bold text-white">
-                            ?
+                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 ring-1 ring-inset ring-slate-200">
+                            <WifiOff className="h-3 w-3" />
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-xs font-medium text-slate-700" title={g.address}>
@@ -961,14 +975,14 @@ export function TripRoutes() {
                             </p>
                             <p className="mt-0.5 text-[11px] text-slate-500">
                               {formatClock(g.startedAt)} – {formatClock(g.endedAt)}
-                              <span className="ml-1.5 font-semibold text-slate-500">
+                              <span className="ml-1.5 font-semibold text-slate-600">
                                 {formatStopDuration(g.durationMs)}
                               </span>
                             </p>
                             <p className="mt-0.5 text-[11px] text-slate-400">
                               {g.position === 'end'
-                                ? 'Device stopped reporting here'
-                                : 'Device not reporting at trip start'}
+                                ? 'Device went offline here'
+                                : 'Device was offline at trip start'}
                             </p>
                           </div>
                         </li>
@@ -976,6 +990,7 @@ export function TripRoutes() {
                     </ul>
                   </div>
                 )}
+                </div>{/* /selected-trip detail scroll area */}
 
                 {selected && (
                   <div className="border-t border-slate-200 p-4">

@@ -225,8 +225,8 @@ export function TruckHistory() {
                           {fmtDuration(st.durationMs)}
                         </span>
                         {st.inferred && (
-                          <span className="ml-1 text-slate-400" title="No GPS reports during this period">
-                            · no signal
+                          <span className="ml-1 text-slate-400" title="Device was offline during this period — duration inferred from the gap between fixes">
+                            · device offline
                           </span>
                         )}
                       </p>

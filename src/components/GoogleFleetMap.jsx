@@ -418,17 +418,17 @@ export function GoogleFleetMap({
             position={position}
             icon={icons.untracked()}
             zIndex={3}
-            title={`No tracking data — ${formatStopDuration(g.durationMs)}`}
+            title={`Device offline — ${formatStopDuration(g.durationMs)}`}
             onClick={() => setOpenId(id)}
           >
             {openId === id && (
               <InfoWindowF position={position} onCloseClick={() => setOpenId(null)}>
                 <div className="max-w-[230px] text-sm">
-                  <strong>No tracking data · {formatStopDuration(g.durationMs)}</strong>
+                  <strong>Device offline · {formatStopDuration(g.durationMs)}</strong>
                   <div className="mt-0.5 text-slate-600">
                     {g.position === 'end'
-                      ? 'Last known position before the device stopped reporting.'
-                      : 'The device was not reporting when the trip began.'}
+                      ? 'Last known position before the device went offline.'
+                      : 'The device was offline when the trip began.'}
                   </div>
                   {g.address && <div className="mt-0.5 text-slate-500">{g.address}</div>}
                   <div className="mt-0.5 text-slate-500">
