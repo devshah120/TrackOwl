@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Route as RouteIcon, MapPin, Flag, Plus, Trash2, RefreshCw, AlertCircle,
   Link2, Copy, Check, Navigation, X, Clock, Loader2, CheckCircle2,
-  Play, Square, WifiOff,
+  Play, Square, WifiOff, ChevronRight,
 } from 'lucide-react';
 import { trips as tripsApi, tracking, geo } from '../services/api';
 import { PlaceSearchInput } from '../components/PlaceSearchInput';
@@ -86,6 +86,202 @@ const formatDurationMin = (mins) => {
   return remMins > 0 ? `~${hrs}h ${remMins}m` : `~${hrs}h`;
 };
 
+// The full account of one trip: how its elapsed time divides up, where the
+// vehicle sat, and when the tracker went quiet. Lives in a modal because it is
+// reference detail for a single trip — inline, it crowded out the trip list.
+function TripBreakdownModal({ trip, timeBudget, stops, coverage, totalIdleMs, onClose }) {
+  // Escape closes, matching every other dismissable surface in the app.
+  useEffect(() => {
+    const onKey = (e) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const gaps = coverage?.gaps || [];
+  const pct = (ms) => (timeBudget.totalMs > 0 ? (ms / timeBudget.totalMs) * 100 : 0);
+
+  return (
+    <div
+      className="fixed inset-0 z-[2000] flex items-center justify-center bg-slate-900/50 p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Trip breakdown"
+    >
+      <div
+        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-xl bg-white shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-200 p-4">
+          <div className="min-w-0">
+            <h3 className="font-semibold text-slate-900">Trip breakdown</h3>
+            <p className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-500">
+              <span className="truncate">{shortPlace(trip.origin.name)}</span>
+              <Navigation className="h-3 w-3 shrink-0 text-sky-500" />
+              <span className="truncate">{shortPlace(trip.destination.name)}</span>
+            </p>
+          </div>
+          <button onClick={onClose} className="shrink-0 text-slate-400 hover:text-slate-600">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {/* Driving, waiting, and unknown are three different answers, and a
+              single "5h 5m" hides which one applies. */}
+          <div className="px-4 pt-4 pb-3">
+            <h4 className="mb-2 text-sm font-semibold text-slate-900">
+              Time breakdown · {formatStopDuration(timeBudget.totalMs)}
+            </h4>
+
+            <div className="flex h-2.5 overflow-hidden rounded-full bg-slate-100">
+              <div className="bg-sky-500" style={{ width: `${pct(timeBudget.movingMs)}%` }} />
+              <div className="bg-amber-500" style={{ width: `${pct(timeBudget.idleMs)}%` }} />
+              <div className="bg-slate-300" style={{ width: `${pct(timeBudget.untrackedMs)}%` }} />
+            </div>
+
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <div className="rounded-lg border border-sky-100 bg-sky-50/60 p-2">
+                <p className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                  <span className="h-2 w-2 rounded-full bg-sky-500" /> Moving
+                </p>
+                <p className="mt-0.5 text-sm font-semibold text-sky-700">
+                  {formatStopDuration(timeBudget.movingMs)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-amber-100 bg-amber-50/60 p-2">
+                <p className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                  <span className="h-2 w-2 rounded-full bg-amber-500" /> Idle
+                </p>
+                <p className="mt-0.5 text-sm font-semibold text-amber-700">
+                  {formatStopDuration(timeBudget.idleMs)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2">
+                <p className="flex items-center gap-1.5 text-[11px] text-slate-600">
+                  <span className="h-2 w-2 rounded-full bg-slate-300" /> Offline
+                </p>
+                <p className="mt-0.5 text-sm font-semibold text-slate-600">
+                  {formatStopDuration(timeBudget.untrackedMs)}
+                </p>
+              </div>
+            </div>
+
+            {/* Say plainly when most of the trip is unaccounted for — the
+                distance and stops below are only as good as the coverage. */}
+            {timeBudget.untrackedMs > timeBudget.totalMs * 0.2 && (
+              <p className="mt-3 flex gap-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[11px] leading-snug text-slate-600">
+                <WifiOff className="mt-px h-3.5 w-3.5 shrink-0 text-slate-400" />
+                <span>
+                  The device was offline for{' '}
+                  <strong>{formatStopDuration(timeBudget.untrackedMs)}</strong> of this trip, so
+                  the distance and stops below cover only part of it.
+                </span>
+              </p>
+            )}
+          </div>
+
+          {/* What explains a run planned for minutes that took hours — each
+              entry is a place the vehicle sat, with how long it sat there. */}
+          {stops.length > 0 && (
+            <div className="border-t border-slate-200 px-4 pt-3 pb-3">
+              <div className="mb-1 flex items-center justify-between">
+                <h4 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                  <Clock className="h-4 w-4 text-amber-600" />
+                  Stops ({stops.length})
+                </h4>
+                <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                  {formatStopDuration(totalIdleMs)} idle
+                </span>
+              </div>
+
+              <ul>
+                {stops.map((s, i) => (
+                  <li
+                    key={`${s.startedAt}-${i}`}
+                    className="flex gap-2.5 border-b border-slate-100 py-2.5 last:border-b-0"
+                  >
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-slate-800">
+                        {s.address || `${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}`}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-slate-500">
+                        {formatClock(s.startedAt)} – {formatClock(s.endedAt)}
+                        <span className="ml-1.5 font-semibold text-amber-700">
+                          {formatStopDuration(s.durationMs)}
+                        </span>
+                        {/* The tracker went quiet rather than reporting from a
+                            standstill, so the duration is bounded by the
+                            silence, not watched throughout. */}
+                        {s.inferred && (
+                          <span
+                            className="ml-1.5 text-slate-400"
+                            title="Device was offline during this period — duration inferred from the gap between fixes"
+                          >
+                            · device offline
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Blind spots, listed separately from stops so the two are never
+              read as the same kind of fact. */}
+          {gaps.length > 0 && (
+            <div className="border-t border-slate-200 px-4 pt-3 pb-4">
+              <div className="mb-1 flex items-center justify-between">
+                <h4 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                  <WifiOff className="h-4 w-4 text-slate-400" />
+                  Offline device ({gaps.length})
+                </h4>
+                <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                  {formatStopDuration(timeBudget.untrackedMs)} offline
+                </span>
+              </div>
+
+              <ul>
+                {gaps.map((g, i) => (
+                  <li
+                    key={`${g.startedAt}-${i}`}
+                    className="flex gap-2.5 border-b border-slate-100 py-2.5 last:border-b-0"
+                  >
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 ring-1 ring-inset ring-slate-200">
+                      <WifiOff className="h-3 w-3" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-slate-700">
+                        {g.address || `${g.lat.toFixed(5)}, ${g.lng.toFixed(5)}`}
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-slate-500">
+                        {formatClock(g.startedAt)} – {formatClock(g.endedAt)}
+                        <span className="ml-1.5 font-semibold text-slate-600">
+                          {formatStopDuration(g.durationMs)}
+                        </span>
+                      </p>
+                      <p className="mt-0.5 text-[11px] text-slate-400">
+                        {g.position === 'end'
+                          ? 'Device went offline here'
+                          : 'Device was offline at trip start'}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function TripRoutes() {
   const navigate = useNavigate();
   const [devices, setDevices] = useState([]);
@@ -123,6 +319,10 @@ export function TripRoutes() {
   // the vehicle's behaviour during them is unknown — but shown so a trip that
   // lost its tracker doesn't read as a confident short journey.
   const [coverage, setCoverage] = useState(null);
+
+  // The full time/stops/offline breakdown lives in a modal — it is reference
+  // detail for one trip, and inline it crowded the trip list it belongs to.
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   const selectedRef = useRef(selectedId);
   selectedRef.current = selectedId;
@@ -179,6 +379,12 @@ export function TripRoutes() {
   // Load the driven path whenever the selection changes, then keep it current
   // while the trip is active.
   const [trailMeta, setTrailMeta] = useState(null);
+
+  // Switching trips invalidates whatever the modal is showing, so close it
+  // rather than let it repaint with another trip's numbers.
+  useEffect(() => {
+    setShowBreakdown(false);
+  }, [selectedId]);
 
   const selectedStatus = selected?.status;
   useEffect(() => {
@@ -703,11 +909,10 @@ export function TripRoutes() {
                   </button>
                 </div>
 
-                {/* The trip list must always keep a usable slice of the
-                    sidebar. The detail panels below grow with the selected
-                    trip's stops and offline periods, and without a floor here
-                    they push the list itself out of view. */}
-                <div className="min-h-[9rem] flex-1 overflow-y-auto">
+                {/* The trip list owns the sidebar now that the breakdown lives
+                    in a modal — only the fixed-height summary and share
+                    footer sit below it. */}
+                <div className="min-h-[12rem] flex-1 overflow-y-auto">
                   {loading && (
                     <p className="flex items-center gap-2 p-4 text-sm text-slate-500">
                       <RefreshCw className="h-4 w-4 animate-spin" /> Loading trips…
@@ -821,176 +1026,58 @@ export function TripRoutes() {
                   })}
                 </div>
 
-                {/* Detail for the selected trip. Capped and independently
-                    scrollable so a trip with many stops can never crowd the
-                    list above it off the screen. */}
-                <div className="max-h-[55%] shrink-0 overflow-y-auto">
-
-                {/* How the trip's elapsed time actually divides up. Driving,
-                    waiting, and unknown are three different answers, and a
-                    single "5h 5m" hides which one applies. */}
+                {/* A compact read of the selected trip, with the full
+                    breakdown one click away in a modal. Kept small here so
+                    the trip list above it stays usable. */}
                 {selected && timeBudget && (stops.length > 0 || untrackedMs > 0) && (
-                  <div className="border-t border-slate-200 px-4 pt-3 pb-2">
-                    <h3 className="mb-2 text-sm font-semibold text-slate-900">
-                      Time breakdown · {formatStopDuration(timeBudget.totalMs)}
-                    </h3>
+                  <div className="shrink-0 border-t border-slate-200 p-4">
+                    <button
+                      onClick={() => setShowBreakdown(true)}
+                      className="group flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 text-left transition hover:border-sky-300 hover:bg-sky-50"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                          <Clock className="h-4 w-4 text-sky-600" />
+                          Trip breakdown
+                        </p>
 
-                    <div className="flex h-2 overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className="bg-sky-500"
-                        style={{ width: `${(timeBudget.movingMs / timeBudget.totalMs) * 100}%` }}
-                      />
-                      <div
-                        className="bg-amber-500"
-                        style={{ width: `${(timeBudget.idleMs / timeBudget.totalMs) * 100}%` }}
-                      />
-                      <div
-                        className="bg-slate-300"
-                        style={{ width: `${(timeBudget.untrackedMs / timeBudget.totalMs) * 100}%` }}
-                      />
-                    </div>
-
-                    <div className="mt-2 space-y-1 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-1.5 text-slate-600">
-                          <span className="h-2 w-2 rounded-full bg-sky-500" /> Moving
-                        </span>
-                        <span className="font-semibold text-slate-700">
-                          {formatStopDuration(timeBudget.movingMs)}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="flex items-center gap-1.5 text-slate-600">
-                          <span className="h-2 w-2 rounded-full bg-amber-500" /> Idle at stops
-                        </span>
-                        <span className="font-semibold text-amber-700">
-                          {formatStopDuration(timeBudget.idleMs)}
-                        </span>
-                      </div>
-                      {timeBudget.untrackedMs > 0 && (
-                        <div className="flex items-center justify-between">
-                          <span className="flex items-center gap-1.5 text-slate-600">
-                            <span className="h-2 w-2 rounded-full bg-slate-300" /> Device offline
-                          </span>
-                          <span className="font-semibold text-slate-500">
-                            {formatStopDuration(timeBudget.untrackedMs)}
-                          </span>
+                        {/* The same three-part split as the modal, so the
+                            shape of the trip is readable without opening it. */}
+                        <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-slate-200">
+                          <div
+                            className="bg-sky-500"
+                            style={{ width: `${(timeBudget.movingMs / timeBudget.totalMs) * 100}%` }}
+                          />
+                          <div
+                            className="bg-amber-500"
+                            style={{ width: `${(timeBudget.idleMs / timeBudget.totalMs) * 100}%` }}
+                          />
+                          <div
+                            className="bg-slate-300"
+                            style={{ width: `${(timeBudget.untrackedMs / timeBudget.totalMs) * 100}%` }}
+                          />
                         </div>
-                      )}
-                    </div>
 
-                    {/* Say plainly when most of the trip is unaccounted for —
-                        the distance and duration above are only as good as the
-                        coverage behind them. */}
-                    {timeBudget.untrackedMs > timeBudget.totalMs * 0.2 && (
-                      <p className="mt-2 flex gap-1.5 rounded-lg border border-slate-200 bg-slate-50 p-2 text-[11px] leading-snug text-slate-600">
-                        <WifiOff className="mt-px h-3.5 w-3.5 shrink-0 text-slate-400" />
-                        <span>
-                          The device was offline for{' '}
-                          <strong>{formatStopDuration(timeBudget.untrackedMs)}</strong> of this
-                          trip, so the distance and stops below cover only part of it.
-                        </span>
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Stops along the selected trip. This is what explains a run
-                    planned for minutes that took hours — each entry is a place
-                    the vehicle sat, with how long it sat there. */}
-                {selected && stops.length > 0 && (
-                  <div className="border-t border-slate-200">
-                    <div className="flex items-center justify-between px-4 pt-3 pb-2">
-                      <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
-                        <Clock className="h-4 w-4 text-amber-600" />
-                        Stops ({stops.length})
-                      </h3>
-                      <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                        {formatStopDuration(totalIdleMs)} idle
-                      </span>
-                    </div>
-
-                    <ul className="px-4 pb-3">
-                      {stops.map((s, i) => (
-                        <li
-                          key={`${s.startedAt}-${i}`}
-                          className="flex gap-2.5 border-b border-slate-100 py-2 last:border-b-0"
-                        >
-                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
-                            {i + 1}
+                        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+                          <span className="font-semibold text-slate-700">
+                            {formatStopDuration(timeBudget.totalMs)} total
                           </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-medium text-slate-800" title={s.address}>
-                              {s.address || `${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}`}
-                            </p>
-                            <p className="mt-0.5 text-[11px] text-slate-500">
-                              {formatClock(s.startedAt)} – {formatClock(s.endedAt)}
-                              <span className="ml-1.5 font-semibold text-amber-700">
-                                {formatStopDuration(s.durationMs)}
-                              </span>
-                              {/* The tracker went quiet rather than reporting
-                                  from a standstill, so the duration is bounded
-                                  by the silence, not watched throughout. */}
-                              {s.inferred && (
-                                <span
-                                  className="ml-1.5 text-slate-400"
-                                  title="Device was offline during this period — duration inferred from the gap between fixes"
-                                >
-                                  · device offline
-                                </span>
-                              )}
-                            </p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
+                          {stops.length > 0 && (
+                            <span className="text-amber-700">
+                              · {stops.length} stop{stops.length === 1 ? '' : 's'}
+                            </span>
+                          )}
+                          {untrackedMs > 0 && (
+                            <span className="text-slate-500">
+                              · {formatStopDuration(untrackedMs)} offline
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-sky-600" />
+                    </button>
                   </div>
                 )}
-
-                {/* Blind spots, listed separately from stops so the two are
-                    never read as the same kind of fact. */}
-                {selected && coverage?.gaps?.length > 0 && (
-                  <div className="border-t border-slate-200 px-4 pt-3 pb-3">
-                    <div className="mb-2 flex items-center justify-between">
-                      <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
-                        <WifiOff className="h-4 w-4 text-slate-400" />
-                        Offline device ({coverage.gaps.length})
-                      </h3>
-                      <span className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                        {formatStopDuration(untrackedMs)} offline
-                      </span>
-                    </div>
-                    <ul>
-                      {coverage.gaps.map((g, i) => (
-                        <li
-                          key={`${g.startedAt}-${i}`}
-                          className="flex gap-2.5 border-b border-slate-100 py-2 last:border-b-0"
-                        >
-                          <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-400 ring-1 ring-inset ring-slate-200">
-                            <WifiOff className="h-3 w-3" />
-                          </span>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-medium text-slate-700" title={g.address}>
-                              {g.address || `${g.lat.toFixed(5)}, ${g.lng.toFixed(5)}`}
-                            </p>
-                            <p className="mt-0.5 text-[11px] text-slate-500">
-                              {formatClock(g.startedAt)} – {formatClock(g.endedAt)}
-                              <span className="ml-1.5 font-semibold text-slate-600">
-                                {formatStopDuration(g.durationMs)}
-                              </span>
-                            </p>
-                            <p className="mt-0.5 text-[11px] text-slate-400">
-                              {g.position === 'end'
-                                ? 'Device went offline here'
-                                : 'Device was offline at trip start'}
-                            </p>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                </div>{/* /selected-trip detail scroll area */}
 
                 {selected && (
                   <div className="border-t border-slate-200 p-4">
@@ -1149,6 +1236,17 @@ export function TripRoutes() {
           </div>
         </div>
       </main>
+
+      {showBreakdown && selected && timeBudget && (
+        <TripBreakdownModal
+          trip={selected}
+          timeBudget={timeBudget}
+          stops={stops}
+          coverage={coverage}
+          totalIdleMs={totalIdleMs}
+          onClose={() => setShowBreakdown(false)}
+        />
+      )}
     </div>
   );
 }
