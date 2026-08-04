@@ -95,17 +95,24 @@ export function AddNewTrip() {
         const res = await driversApi.list();
         if (cancelled) return;
         setDrivers(
-          res.drivers.map((d) => ({
-            id: d._id || d.id,
-            name: d.name,
-            mobile: d.mobile || '',
-            salary: d.salary,
-            licenseNumber: d.licenseNumber || '',
-            licenseExpiry: d.licenseExpiry ? d.licenseExpiry.slice(0, 10) : '',
-            truckNumber: d.truck?.number || '',
-            truckModel: d.truck?.model || '',
-            isPrimary: d.isPrimary,
-          }))
+          res.drivers.map((d) => {
+            // `truck` comes back populated on the list endpoint, but tolerate a
+            // bare id so the filter below still works either way.
+            const truck = d.truck;
+            const truckRef = truck && typeof truck === 'object' ? (truck._id || truck.id) : truck;
+            return {
+              id: d._id || d.id,
+              name: d.name,
+              mobile: d.mobile || '',
+              salary: d.salary,
+              licenseNumber: d.licenseNumber || '',
+              licenseExpiry: d.licenseExpiry ? d.licenseExpiry.slice(0, 10) : '',
+              truckId: truckRef ? String(truckRef) : '',
+              truckNumber: (truck && typeof truck === 'object' ? truck.number : '') || '',
+              truckModel: (truck && typeof truck === 'object' ? truck.model : '') || '',
+              isPrimary: d.isPrimary,
+            };
+          })
         );
       } catch (err) {
         if (!cancelled) setDriversError(err.message || 'Failed to load drivers');
@@ -367,6 +374,16 @@ export function AddNewTrip() {
     [trucks, truckId]
   );
 
+  // Only the drivers assigned to the truck chosen on the Route step — picking a
+  // driver from some other vehicle would put the wrong name on the Lorry
+  // Receipt. Primary driver first, so the usual choice is at the top.
+  const truckDrivers = useMemo(() => {
+    if (!truckId) return [];
+    return drivers
+      .filter((d) => d.truckId === truckId)
+      .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
+  }, [drivers, truckId]);
+
   // The tracker fitted to the chosen truck, if it has reported a position.
   // Drives both the "Use my location" button and the marker on the map.
   const selectedDevice = useMemo(
@@ -382,7 +399,20 @@ export function AddNewTrip() {
     setTruckId(nextId);
     const truck = trucks.find((t) => t.id === nextId);
     setDeviceId(truck?.deviceId || '');
-    setFormData((prev) => ({ ...prev, truckNumber: truck?.number || '' }));
+    setFormData((prev) => {
+      // A driver belongs to one truck, so a driver already chosen for the
+      // previous truck must not survive the change — leaving them selected
+      // would print the wrong name on the Lorry Receipt.
+      const keepDriver = prev.driverId
+        && drivers.some((d) => d.id === prev.driverId && d.truckId === nextId);
+      return {
+        ...prev,
+        truckNumber: truck?.number || '',
+        ...(keepDriver
+          ? {}
+          : { driverId: '', driverName: '', driverMobile: '', driverLicenseNumber: '' }),
+      };
+    });
   };
 
   // Both endpoints have real coordinates — the condition for drawing a road
@@ -1013,7 +1043,9 @@ export function AddNewTrip() {
                 <div className="bg-white rounded-lg border border-slate-200 p-6">
                   <h2 className="text-lg font-semibold text-slate-900 mb-1">Vehicle &amp; Driver Details</h2>
                   <p className="text-sm text-slate-500 mb-4">
-                    Picking a driver fills in their mobile and licence for the Lorry Receipt.
+                    {selectedTruck
+                      ? `Drivers assigned to ${selectedTruck.number}. Picking one fills in their mobile and licence for the Lorry Receipt.`
+                      : 'Picking a driver fills in their mobile and licence for the Lorry Receipt.'}
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
@@ -1023,20 +1055,30 @@ export function AddNewTrip() {
                         value={formData.driverId}
                         onChange={handleDriverChange}
                         className={INPUT}
+                        disabled={!truckId}
                       >
+                        {/* Scoped to the chosen truck, so the truck number is no
+                            longer needed to tell one driver from another. */}
                         <option value="">
-                          {drivers.length ? 'Choose a driver...' : 'No drivers on the roster yet'}
+                          {!truckId
+                            ? 'Choose a truck on the Route step first'
+                            : truckDrivers.length
+                            ? 'Choose a driver...'
+                            : `No drivers assigned to ${selectedTruck?.number || 'this truck'}`}
                         </option>
-                        {/* Trucks can share several drivers, so the truck number is
-                            part of the label to tell them apart. */}
-                        {drivers.map((driver) => (
+                        {truckDrivers.map((driver) => (
                           <option key={driver.id} value={driver.id}>
                             {driver.name}
-                            {driver.truckNumber ? ` — ${driver.truckNumber}` : ' — unassigned'}
+                            {driver.isPrimary ? ' — primary' : ''}
                           </option>
                         ))}
                       </select>
                       {driversError && <p className="mt-1 text-xs text-red-600">{driversError}</p>}
+                      {truckId && !truckDrivers.length && !driversError && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Assign a driver to this truck under Fleet Management first.
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className={LABEL}>Driver Name</label>
