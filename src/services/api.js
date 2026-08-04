@@ -156,8 +156,11 @@ export const drivers = {
   remove: (id) => apiCall(`/drivers/${id}`, { method: 'DELETE' }),
 };
 
-// Daily Ledger — income/expense entries.
+// Daily Ledger — income/expense entries, each optionally tied to a truck and
+// driver and backed by a scanned receipt.
 export const ledger = {
+  // Entries come back without the receipt image — `receipt.filename` tells you
+  // one exists; call getReceipt(id) to actually load it.
   list: () => apiCall('/ledger'),
 
   create: (payload) =>
@@ -167,6 +170,9 @@ export const ledger = {
     apiCall(`/ledger/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
 
   remove: (id) => apiCall(`/ledger/${id}`, { method: 'DELETE' }),
+
+  // The stored receipt as { dataUrl, filename, mimeType, uploadedAt }.
+  getReceipt: (id) => apiCall(`/ledger/${id}/receipt`),
 };
 
 // Trips & Documents — freight/billing records (party, LR, bill, payment status).

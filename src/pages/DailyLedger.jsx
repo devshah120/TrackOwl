@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, Filter, ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell, TrendingUp, TrendingDown } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Filter, ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell, TrendingUp, TrendingDown, Paperclip } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
@@ -110,10 +110,14 @@ export function DailyLedger() {
   const { start: rangeStart, end: rangeEnd } = getDateRange();
 
   const filteredEntries = ledgerEntries.filter((entry) => {
+    const q = searchQuery.toLowerCase();
     const matchesSearch =
-      entry.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      entry.reference.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      entry.category.toLowerCase().includes(searchQuery.toLowerCase());
+      entry.description.toLowerCase().includes(q) ||
+      entry.reference.toLowerCase().includes(q) ||
+      entry.category.toLowerCase().includes(q) ||
+      // So "MH-01-AB-1234" or a driver's name finds every entry booked to them.
+      (entry.truck?.number || '').toLowerCase().includes(q) ||
+      (entry.driver?.name || '').toLowerCase().includes(q);
 
     const entryDate = new Date(entry.date);
     const dateMatch = entryDate >= rangeStart && entryDate <= rangeEnd;
@@ -197,6 +201,23 @@ export function DailyLedger() {
       setLedgerEntries((prev) => prev.filter((entry) => (entry._id || entry.id) !== id));
     } catch (err) {
       setError(err.message || 'Failed to delete entry');
+    }
+  };
+
+  // Receipts are left out of the list response, so the file is fetched only
+  // when someone actually opens one.
+  const openReceipt = async (id) => {
+    try {
+      const { receipt } = await ledger.getReceipt(id);
+      const win = window.open();
+      if (!win) return;
+      if (receipt.mimeType === 'application/pdf') {
+        win.location = receipt.dataUrl;
+      } else {
+        win.document.write(`<img src="${receipt.dataUrl}" style="max-width:100%">`);
+      }
+    } catch (err) {
+      setError(err.message || 'Could not open that receipt');
     }
   };
 
@@ -514,7 +535,9 @@ export function DailyLedger() {
                     <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Type</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Category</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Description</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Truck / Driver</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Payment Method</th>
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Receipt</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Amount</th>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Actions</th>
                   </tr>
@@ -532,7 +555,33 @@ export function DailyLedger() {
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-700">{entry.category}</td>
                       <td className="px-6 py-4 text-sm text-slate-700">{entry.description}</td>
+                      <td className="px-6 py-4 text-sm text-slate-700 whitespace-nowrap">
+                        {entry.truck ? (
+                          <>
+                            <p className="text-slate-900">{entry.truck.number}</p>
+                            {entry.driver && (
+                              <p className="text-xs text-slate-500">{entry.driver.name}</p>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-sm text-slate-700">{entry.paymentMethod}</td>
+                      <td className="px-6 py-4 text-sm">
+                        {entry.receipt?.filename ? (
+                          <button
+                            onClick={() => openReceipt(entryId)}
+                            className="flex items-center gap-1.5 text-blue-600 hover:underline"
+                            title={entry.receipt.filename}
+                          >
+                            <Paperclip className="w-4 h-4" />
+                            View
+                          </button>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-sm font-semibold">
                         <span className={getTypeColor(entry.type)}>
                           {getTypeSign(entry.type)}₹{entry.amount.toLocaleString()}
