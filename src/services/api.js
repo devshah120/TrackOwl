@@ -156,6 +156,36 @@ export const billing = {
     apiCall(`/billing-trips/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
 
   remove: (id) => apiCall(`/billing-trips/${id}`, { method: 'DELETE' }),
+
+  // Downloads a generated document. The PDF is fetched as a blob rather than
+  // opened by navigation because the endpoint is token-protected and a plain
+  // browser navigation cannot send the Authorization header.
+  // kind is 'lr' | 'invoice' | 'goods'.
+  downloadDocument: async (id, kind) => {
+    const token = localStorage.getItem('auth_token');
+    const response = await fetch(`${API_BASE_URL}/billing-trips/${id}/documents/${kind}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+
+    if (!response.ok) {
+      // Errors come back as JSON even though the success path is a PDF.
+      const err = await response.json().catch(() => ({}));
+      throw { status: response.status, message: err.error || 'Failed to generate document' };
+    }
+
+    const blob = await response.blob();
+    const match = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') || '');
+    const filename = match ? match[1] : `${kind}.pdf`;
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  },
 };
 
 // Authenticated user's profile — company/bank details shown in Settings.

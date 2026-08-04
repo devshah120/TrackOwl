@@ -1,10 +1,18 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, FileText, Download, Eye, Filter, ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, FileText, Download, Eye, Filter, ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell, IndianRupee } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { Topbar } from '../components/Topbar';
 import { billing } from '../services/api';
+
+// The three documents the backend can render for a trip. `kind` matches the
+// :kind segment of /api/billing-trips/:id/documents/:kind.
+const DOCUMENT_TYPES = [
+  { kind: 'invoice', label: 'Tax Invoice', color: 'text-blue-600' },
+  { kind: 'lr', label: 'Lorry Receipt (LR)', color: 'text-amber-600' },
+  { kind: 'goods', label: 'Goods Declaration', color: 'text-green-600' },
+];
 
 export function TripsAndDocuments() {
   const navigate = useNavigate();
@@ -19,6 +27,7 @@ export function TripsAndDocuments() {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [downloading, setDownloading] = useState('');
 
   const [paymentForm, setPaymentForm] = useState({ paymentType: 'Full Payment', amount: '', paymentMethod: 'Cash', date: '' });
   const [editForm, setEditForm] = useState({ truck: '', lr: '', bill: '', partyName: '', amount: '', date: '', status: 'Pending' });
@@ -105,6 +114,19 @@ export function TripsAndDocuments() {
         return 'bg-red-100 text-red-800';
       default:
         return 'bg-slate-100 text-slate-800';
+    }
+  };
+
+  // Keyed as "tripId:kind" so only the clicked button shows a spinner.
+  const handleDownload = async (tripId, kind) => {
+    setDownloading(`${tripId}:${kind}`);
+    setLoadError('');
+    try {
+      await billing.downloadDocument(tripId, kind);
+    } catch (err) {
+      setLoadError(err.message || 'Failed to download document');
+    } finally {
+      setDownloading('');
     }
   };
 
@@ -294,6 +316,14 @@ export function TripsAndDocuments() {
                           className="p-2 hover:bg-blue-50 text-blue-600 rounded transition-colors"
                           title="Record Payment"
                         >
+                          <IndianRupee className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDownload(tripId, 'lr')}
+                          disabled={downloading === `${tripId}:lr`}
+                          className="p-2 hover:bg-amber-50 text-amber-600 rounded transition-colors disabled:opacity-50"
+                          title="Download Lorry Receipt"
+                        >
                           <Download className="w-4 h-4" />
                         </button>
                         <button
@@ -324,55 +354,41 @@ export function TripsAndDocuments() {
       {/* Documents Tab */}
       {!loading && activeTab === 'documents' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredTrips.map((trip) => (
-            <div key={trip._id || trip.id} className="bg-white rounded-lg border border-slate-200 p-6">
+          {filteredTrips.map((trip) => {
+            const tripId = trip._id || trip.id;
+            return (
+            <div key={tripId} className="bg-white rounded-lg border border-slate-200 p-6">
               <div className="mb-4">
-                <h3 className="text-lg font-semibold text-slate-900">{trip._id || trip.id}</h3>
+                <h3 className="text-lg font-semibold text-slate-900">
+                  {trip.lr || trip.bill || tripId}
+                </h3>
                 <p className="text-sm text-slate-600">{trip.partyName}</p>
               </div>
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-blue-600" />
-                    <span className="text-sm font-medium">Tax Invoice</span>
-                  </div>
-                  {trip.documents.tax ? (
-                    <button className="p-1 hover:bg-blue-50 text-blue-600 rounded transition-colors">
-                      <Download className="w-4 h-4" />
+                {DOCUMENT_TYPES.map(({ kind, label, color }) => (
+                  <div key={kind} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FileText className={`w-5 h-5 ${color}`} />
+                      <span className="text-sm font-medium">{label}</span>
+                    </div>
+                    <button
+                      onClick={() => handleDownload(tripId, kind)}
+                      disabled={downloading === `${tripId}:${kind}`}
+                      title={`Download ${label}`}
+                      className={`p-1 rounded transition-colors ${color} hover:bg-slate-100 disabled:opacity-50`}
+                    >
+                      {downloading === `${tripId}:${kind}` ? (
+                        <span className="text-xs px-1">...</span>
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
                     </button>
-                  ) : (
-                    <span className="text-xs text-slate-400">N/A</span>
-                  )}
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-amber-600" />
-                    <span className="text-sm font-medium">Lorry Receipt (LR)</span>
                   </div>
-                  {trip.documents.lr ? (
-                    <button className="p-1 hover:bg-amber-50 text-amber-600 rounded transition-colors">
-                      <Download className="w-4 h-4" />
-                    </button>
-                  ) : (
-                    <span className="text-xs text-slate-400">N/A</span>
-                  )}
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <FileText className="w-5 h-5 text-green-600" />
-                    <span className="text-sm font-medium">Goods Declaration</span>
-                  </div>
-                  {trip.documents.goods ? (
-                    <button className="p-1 hover:bg-green-50 text-green-600 rounded transition-colors">
-                      <Download className="w-4 h-4" />
-                    </button>
-                  ) : (
-                    <span className="text-xs text-slate-400">N/A</span>
-                  )}
-                </div>
+                ))}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

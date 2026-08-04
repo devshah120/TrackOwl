@@ -73,6 +73,13 @@ export function AddNewTrip() {
     deliveryDate: '',
     status: 'In Transit',
 
+    // Document references printed on the LR / invoice.
+    lrNumber: '',
+    billNumber: '',
+    invoiceNo: '',
+    gstPayableBy: 'Consignee',
+    lrCharges: '',
+
     // Party Details - Supplier
     supplierName: '',
     supplierGst: '',
@@ -90,6 +97,7 @@ export function AddNewTrip() {
     quantity: '',
     unit: 'Kg',
     totalWeight: '',
+    weightUnit: 'Kg',
     declaredValue: '',
     freightRate: '',
     totalFreightAmount: '',
@@ -217,6 +225,11 @@ export function AddNewTrip() {
       return;
     }
 
+    // "Mumbai → Bangalore" is how the route field is prompted; split it so the
+    // LR's From and To boxes are filled separately. An unsplittable value goes
+    // to From whole rather than being dropped.
+    const [from, to] = formData.route.split(/\s*(?:→|->|to)\s*/i);
+
     setSaving(true);
     try {
       await billing.create({
@@ -225,6 +238,49 @@ export function AddNewTrip() {
         amount,
         date: formData.tripDate,
         status: toBillingStatus(formData.paymentStatus),
+
+        lr: formData.lrNumber,
+        bill: formData.billNumber,
+        invoiceNo: formData.invoiceNo,
+        fromLocation: (from || '').trim(),
+        toLocation: (to || '').trim(),
+        gstPayableBy: formData.gstPayableBy,
+        lrCharges: formData.lrCharges,
+        loadingDate: formData.loadingDate,
+        deliveryDate: formData.deliveryDate,
+
+        consignor: {
+          name: formData.supplierName,
+          gst: formData.supplierGst,
+          address: formData.supplierAddress,
+          contact: formData.supplierContact,
+        },
+        consignee: {
+          name: formData.buyerName,
+          gst: formData.buyerGst,
+          address: formData.buyerAddress,
+          contact: formData.buyerContact,
+        },
+        goods: {
+          description: formData.goodsDescription,
+          quantity: formData.quantity,
+          unit: formData.unit,
+          weight: formData.totalWeight,
+          weightUnit: formData.weightUnit,
+          declaredValue: formData.declaredValue,
+          freightRate: formData.freightRate,
+        },
+        driver: {
+          name: formData.driverName,
+          mobile: formData.driverMobile,
+          licenseNumber: formData.driverLicenseNumber,
+        },
+        payment: {
+          method: formData.paymentMethod,
+          advance: formData.advanceAmount,
+          balance: formData.balanceAmount,
+          notes: formData.paymentNotes,
+        },
       });
       navigate('/trips-and-documents');
     } catch (err) {
@@ -318,6 +374,73 @@ export function AddNewTrip() {
                     <option>Delivered</option>
                     <option>Completed</option>
                   </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Document References */}
+            <div className="bg-white rounded-lg border border-slate-200 p-6">
+              <h2 className="text-lg font-semibold text-slate-900 mb-1">Document References</h2>
+              <p className="text-sm text-slate-500 mb-4">
+                Printed on the Lorry Receipt, Tax Invoice and Goods Declaration.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">LR Number</label>
+                  <input
+                    type="text"
+                    name="lrNumber"
+                    placeholder="e.g., 80101"
+                    value={formData.lrNumber}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Bill Number</label>
+                  <input
+                    type="text"
+                    name="billNumber"
+                    placeholder="e.g., BILL-2201"
+                    value={formData.billNumber}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Invoice Number</label>
+                  <input
+                    type="text"
+                    name="invoiceNo"
+                    placeholder="e.g., INV-2201"
+                    value={formData.invoiceNo}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">GST Payable By</label>
+                  <select
+                    name="gstPayableBy"
+                    value={formData.gstPayableBy}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option>Consignor</option>
+                    <option>Consignee</option>
+                    <option>Transporter</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">L.R. Charges (₹)</label>
+                  <input
+                    type="number"
+                    name="lrCharges"
+                    placeholder="0"
+                    value={formData.lrCharges}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
                 </div>
               </div>
             </div>
@@ -534,15 +657,28 @@ export function AddNewTrip() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Total Weight</label>
-                  <input
-                    type="number"
-                    name="totalWeight"
-                    placeholder="0"
-                    value={formData.totalWeight}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    required
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      name="totalWeight"
+                      placeholder="0"
+                      value={formData.totalWeight}
+                      onChange={handleInputChange}
+                      className="flex-1 min-w-0 px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                    />
+                    <select
+                      name="weightUnit"
+                      value={formData.weightUnit}
+                      onChange={handleInputChange}
+                      aria-label="Weight unit"
+                      className="w-24 px-2 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option>Kg</option>
+                      <option>Ton</option>
+                      <option>Quintal</option>
+                    </select>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Declared Value (₹)</label>
