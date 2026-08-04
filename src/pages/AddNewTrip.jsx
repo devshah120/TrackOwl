@@ -21,6 +21,15 @@ const asNumberInput = (value) => (value === 0 || value === undefined || value ==
 // Short first segment of a place name ("Mumbai, Maharashtra, India" → "Mumbai").
 const shortPlace = (name = '') => name.split(',')[0].trim();
 
+// Roughly mainland India, as a two-corner box. Used as the map's opening view
+// before a truck or a From/To point gives it somewhere better to look. Two
+// corners rather than one centre point so the map fits a region instead of
+// snapping to street-level zoom on an arbitrary spot.
+const INDIA_VIEW = {
+  sw: { lat: 8.0, lng: 68.5 },
+  ne: { lat: 35.5, lng: 89.0 },
+};
+
 // Format planned duration in minutes/hours (e.g. ~12 min or ~1h 15m).
 const formatDurationMin = (mins) => {
   if (!mins || mins <= 0) return '';
@@ -487,6 +496,10 @@ export function AddNewTrip() {
   // Frame the map on whichever endpoints are set. With neither set yet, fall
   // back to the chosen vehicle so selecting a truck moves the map to where it
   // is — which is usually where the trip starts.
+  //
+  // Falls back to the country view rather than null: the map only frames itself
+  // when it is given points, so handing it nothing leaves an unpainted grey
+  // panel until the first truck is picked.
   const framePoints = useMemo(() => {
     const pts = [];
     if (origin?.lat != null) pts.push({ lat: origin.lat, lng: origin.lng });
@@ -498,8 +511,20 @@ export function AddNewTrip() {
         lng: selectedDevice.lastPosition.longitude,
       }];
     }
-    return null;
+    return [INDIA_VIEW.sw, INDIA_VIEW.ne];
   }, [origin, destination, deviceHasFix, selectedDevice]);
+
+  // Names what the map is currently framing. The component's default key is the
+  // number of points, and the opening country view is two points just as a
+  // From+To pair is — without this they would collide and the map would refuse
+  // to re-frame once both endpoints were picked.
+  const frameKey = useMemo(() => {
+    const o = origin?.lat != null ? `${origin.lat},${origin.lng}` : '';
+    const d = destination?.lat != null ? `${destination.lat},${destination.lng}` : '';
+    if (o || d) return `route_${o}_${d}`;
+    if (deviceHasFix) return `vehicle_${deviceId}`;
+    return 'default';
+  }, [origin, destination, deviceHasFix, deviceId]);
 
   const mapRoute = useMemo(() => ({
     polyline: routeInfo?.polyline || null,
