@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Route as RouteIcon, MapPin, Flag, Plus, Trash2, RefreshCw, AlertCircle,
-  Link2, Copy, Check, Navigation, X, Clock, Loader2, CheckCircle2,
+  Route as RouteIcon, Plus, Trash2, RefreshCw, AlertCircle,
+  Link2, Copy, Check, Navigation, X, Clock, CheckCircle2,
   Play, Square, WifiOff, ChevronRight,
 } from 'lucide-react';
 import { trips as tripsApi, tracking, geo } from '../services/api';
-import { PlaceSearchInput } from '../components/PlaceSearchInput';
 import { Topbar } from '../components/Topbar';
 import { GoogleFleetMap } from '../components/GoogleFleetMap';
 import { useNavigate } from 'react-router-dom';
@@ -292,18 +291,6 @@ export function TripRoutes() {
   const [share, setShare] = useState(null);
   const [copied, setCopied] = useState(false);
 
-  // Trip creation state
-  const [creating, setCreating] = useState(false);
-  const [createDeviceId, setCreateDeviceId] = useState('');
-  const [createOrigin, setCreateOrigin] = useState(null);
-  const [createDestination, setCreateDestination] = useState(null);
-  const [createRoute, setCreateRoute] = useState(null);
-  const [routing, setRouting] = useState(false);
-  const [pickingTarget, setPickingTarget] = useState(null); // 'origin' | 'destination' | null
-  const [geocodingPick, setGeocodingPick] = useState(false);
-  const [createBusy, setCreateBusy] = useState(false);
-  const [createError, setCreateError] = useState(null);
-
   // The actual driven path for the selected trip, as [[lat, lng], ...]. Loaded
   // per trip and refreshed on the poll while the trip is still running, so the
   // amber trail grows behind the vehicle as it moves.
@@ -353,12 +340,6 @@ export function TripRoutes() {
     const timer = setInterval(load, POLL_MS);
     return () => clearInterval(timer);
   }, []);
-
-  useEffect(() => {
-    if (!createDeviceId && devices.length > 0) {
-      setCreateDeviceId(devices[0]._id || devices[0].id || '');
-    }
-  }, [devices, createDeviceId]);
 
   const selected = useMemo(
     () => trips.find((t) => (t.id || t._id) === selectedId) || null,
@@ -529,30 +510,14 @@ export function TripRoutes() {
   }, [selected, trailMeta, totalIdleMs, untrackedMs]);
 
   const framePoints = useMemo(() => {
-    if (creating) {
-      const pts = [];
-      if (createOrigin) pts.push([createOrigin.lat, createOrigin.lng]);
-      if (createDestination) pts.push([createDestination.lat, createDestination.lng]);
-      if (!pts.length) return null;
-      return pts.map(([lat, lng]) => ({ lat, lng }));
-    }
     const pts = routePoints ? [...routePoints] : [];
     if (livePos) pts.push(livePos);
     if (!pts.length) return null;
     return pts.map(([lat, lng]) => ({ lat, lng }));
-  }, [creating, createOrigin, createDestination, routePoints, livePos]);
+  }, [routePoints, livePos]);
 
-  // The selected trip's route or creation preview route
+  // The selected trip's route
   const mapRoute = useMemo(() => {
-    if (creating) {
-      return {
-        polyline: createRoute?.polyline || null,
-        origin: createOrigin ? { lat: createOrigin.lat, lng: createOrigin.lng } : null,
-        originName: createOrigin?.name || 'From',
-        destination: createDestination ? { lat: createDestination.lat, lng: createDestination.lng } : null,
-        destinationName: createDestination?.name || 'To',
-      };
-    }
     if (!selected) return null;
     return {
       polyline: routePoints,
@@ -564,118 +529,7 @@ export function TripRoutes() {
       destination: { lat: selected.destination.lat, lng: selected.destination.lng },
       destinationName: selected.destination.name,
     };
-  }, [creating, createRoute, createOrigin, createDestination, selected, routePoints, visibleTrail, visibleStops, untrackedGaps]);
-
-  // Recompute the road route whenever both endpoints are set during creation.
-  useEffect(() => {
-    if (!creating || !createOrigin || !createDestination) {
-      setCreateRoute(null);
-      return;
-    }
-    let cancelled = false;
-    const controller = new AbortController();
-    setRouting(true);
-    setCreateError(null);
-    geo.getRoute(createOrigin, createDestination, { signal: controller.signal })
-      .then((r) => { if (!cancelled) setCreateRoute(r); })
-      .catch((err) => {
-        if (err.name !== 'AbortError' && !cancelled) {
-          setCreateRoute(null);
-        }
-      })
-      .finally(() => { if (!cancelled) setRouting(false); });
-    return () => { cancelled = true; controller.abort(); };
-  }, [creating, createOrigin, createDestination]);
-
-  const handleStartCreate = () => {
-    setCreating(true);
-    setCreateDeviceId(devices[0]?._id || devices[0]?.id || '');
-    setCreateOrigin(null);
-    setCreateDestination(null);
-    setCreateRoute(null);
-    setPickingTarget('origin');
-    setCreateError(null);
-  };
-
-  const handleCancelCreate = () => {
-    setCreating(false);
-    setPickingTarget(null);
-    setCreateError(null);
-  };
-
-  const handleMapClick = async ({ lat, lng }) => {
-    if (!creating) return;
-
-    let target = pickingTarget;
-    if (!target) {
-      if (!createOrigin) target = 'origin';
-      else if (!createDestination) target = 'destination';
-      else target = 'destination';
-    }
-
-    setGeocodingPick(true);
-    setCreateError(null);
-    try {
-      const place = await geo.reverseGeocode({ lat, lng });
-      if (target === 'origin') {
-        setCreateOrigin(place);
-        if (!createDestination) {
-          setPickingTarget('destination');
-        } else {
-          setPickingTarget(null);
-        }
-      } else {
-        setCreateDestination(place);
-        setPickingTarget(null);
-      }
-    } catch (err) {
-      setCreateError(err.message || 'Could not resolve address for clicked position');
-    } finally {
-      setGeocodingPick(false);
-    }
-  };
-
-  const handleUseVehicleLocation = async () => {
-    const dev = devices.find((d) => (d._id || d.id) === createDeviceId);
-    if (!dev) {
-      throw new Error('Please select a vehicle first.');
-    }
-    const pos = dev.lastPosition;
-    if (!pos?.latitude || !pos?.longitude) {
-      throw new Error(`No GPS location recorded for ${dev.name || 'this vehicle'} yet.`);
-    }
-    const coords = { lat: pos.latitude, lng: pos.longitude };
-    const place = await geo.reverseGeocode(coords);
-    return place;
-  };
-
-  const canSubmitCreate = createDeviceId && createOrigin && createDestination && !createBusy && !routing;
-
-  const submitNewTrip = async (e) => {
-    e.preventDefault();
-    if (!canSubmitCreate) return;
-    setCreateBusy(true);
-    setCreateError(null);
-    try {
-      const res = await tripsApi.create({
-        deviceId: createDeviceId,
-        origin: createOrigin,
-        destination: createDestination,
-        routePolyline: createRoute?.polyline,
-        distanceKm: createRoute?.distanceKm,
-        durationMin: createRoute?.durationMin,
-        route: createRoute,
-      });
-      setTrips((prev) => [res.trip, ...prev]);
-      setSelectedId(res.trip.id || res.trip._id);
-      setCreating(false);
-      setPickingTarget(null);
-    } catch (err) {
-      setCreateError(err.message || 'Could not create trip');
-    } finally {
-      setCreateBusy(false);
-    }
-  };
+  }, [selected, routePoints, visibleTrail, visibleStops, untrackedGaps]);
 
   // Arrival detection
   useEffect(() => {
@@ -782,402 +636,238 @@ export function TripRoutes() {
         <div className="flex h-full flex-col gap-4 p-4 lg:flex-row">
           {/* ---- left sidebar: trip list or trip creation ---------------- */}
           <aside className="flex w-full flex-col rounded-xl border border-slate-200 bg-white lg:w-96">
-            {creating ? (
-              /* ---- New Trip Form ---- */
-              <>
-                <div className="flex items-center justify-between border-b border-slate-200 p-4">
-                  <h2 className="flex items-center gap-2 font-semibold text-slate-900">
-                    <RouteIcon className="h-5 w-5 text-sky-600" />
-                    New Trip Route
-                  </h2>
-                  <button
-                    onClick={handleCancelCreate}
-                    className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700"
-                  >
-                    <X className="h-4 w-4" /> Cancel
-                  </button>
-                </div>
+            {/* ---- Trip List ---- */}
+            <div className="flex items-center justify-between border-b border-slate-200 p-4">
+              <h2 className="flex items-center gap-2 font-semibold text-slate-900">
+                <RouteIcon className="h-5 w-5 text-sky-600" />
+                Trip Routes
+              </h2>
+            </div>
 
-                <form onSubmit={submitNewTrip} className="flex-1 overflow-y-auto space-y-4 p-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-slate-700">Vehicle</label>
-                    {devices.length === 0 ? (
-                      <p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
-                        No vehicles yet. Add one under Live Tracking first.
-                      </p>
-                    ) : (
-                      <select
-                        value={createDeviceId}
-                        onChange={(e) => setCreateDeviceId(e.target.value)}
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                      >
-                        {devices.map((d) => (
-                          <option key={d._id || d.id} value={d._id || d.id}>{d.name}</option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
 
-                  <PlaceSearchInput
-                    label="From"
-                    placeholder="Start location, e.g. Mumbai"
-                    value={createOrigin}
-                    onSelect={setCreateOrigin}
-                    icon={MapPin}
-                    allowCurrentLocation
-                    onUseCurrentLocation={handleUseVehicleLocation}
-                    allowMapPick
-                    onPickOnMap={() => setPickingTarget(pickingTarget === 'origin' ? null : 'origin')}
-                    isPickingOnMap={pickingTarget === 'origin'}
-                  />
-
-                  <PlaceSearchInput
-                    label="To"
-                    placeholder="Destination, e.g. Pune"
-                    value={createDestination}
-                    onSelect={setCreateDestination}
-                    icon={Flag}
-                    allowMapPick
-                    onPickOnMap={() => setPickingTarget(pickingTarget === 'destination' ? null : 'destination')}
-                    isPickingOnMap={pickingTarget === 'destination'}
-                  />
-
-                  <p className="flex items-start gap-1.5 rounded-lg border border-sky-100 bg-sky-50 p-2.5 text-xs text-slate-600">
-                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
-                    <span>
-                      Tip: Click <strong>Pick on map</strong> or click anywhere directly on the map to choose From and To locations.
-                    </span>
+              {/* The trip list owns the sidebar now that the breakdown lives
+                  in a modal — only the fixed-height summary and share
+                  footer sit below it. */}
+              <div className="min-h-[12rem] flex-1 overflow-y-auto">
+                {loading && (
+                  <p className="flex items-center gap-2 p-4 text-sm text-slate-500">
+                    <RefreshCw className="h-4 w-4 animate-spin" /> Loading trips…
                   </p>
+                )}
 
-                  {/* route summary */}
-                  {createOrigin && createDestination && (
-                    <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-                      {routing ? (
-                        <span className="flex items-center gap-2">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Calculating road route…
-                        </span>
-                      ) : createRoute ? (
-                        <span className="flex items-center gap-3 font-medium text-slate-700">
-                          <span className="flex items-center gap-1"><Navigation className="h-3.5 w-3.5 text-sky-500" /> {createRoute.distanceKm} km</span>
-                          <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> {formatDurationMin(createRoute.durationMin)}</span>
-                        </span>
-                      ) : (
-                        <span>Route service unavailable.</span>
-                      )}
-                    </div>
-                  )}
-
-                  {createError && (
-                    <div className="flex gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-                      <AlertCircle className="h-4 w-4 shrink-0" />
-                      <span>{createError}</span>
-                    </div>
-                  )}
-
-                  <div className="flex gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={handleCancelCreate}
-                      className="w-1/3 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={!canSubmitCreate}
-                      className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {createBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RouteIcon className="h-4 w-4" />}
-                      {createBusy ? 'Saving…' : 'Create trip'}
-                    </button>
+                {error && (
+                  <div className="m-4 flex gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>{error}</span>
                   </div>
-                </form>
-              </>
-            ) : (
-              /* ---- Trip List ---- */
-              <>
-                <div className="flex items-center justify-between border-b border-slate-200 p-4">
-                  <h2 className="flex items-center gap-2 font-semibold text-slate-900">
-                    <RouteIcon className="h-5 w-5 text-sky-600" />
-                    Trip Routes
-                  </h2>
-                  <button
-                    onClick={handleStartCreate}
-                    className="flex items-center gap-1 rounded-lg bg-sky-600 px-2.5 py-1.5 text-xs font-medium text-white transition hover:bg-sky-700"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> New trip
-                  </button>
-                </div>
+                )}
 
-                {/* The trip list owns the sidebar now that the breakdown lives
-                    in a modal — only the fixed-height summary and share
-                    footer sit below it. */}
-                <div className="min-h-[12rem] flex-1 overflow-y-auto">
-                  {loading && (
-                    <p className="flex items-center gap-2 p-4 text-sm text-slate-500">
-                      <RefreshCw className="h-4 w-4 animate-spin" /> Loading trips…
+                {/* Trips are created with their paperwork on the Add New Trip
+                    wizard, so this page never creates one — it points there
+                    rather than offering a second, route-only way in. */}
+                {!loading && !error && trips.length === 0 && (
+                  <div className="p-4 text-sm text-slate-500">
+                    <p className="font-medium text-slate-700">No trips yet.</p>
+                    <p className="mt-1">
+                      Create one under <strong>Trips &amp; Documents</strong> — pick the From and To
+                      locations on the map and attach a tracker, and the trip appears here for live
+                      tracking.
                     </p>
-                  )}
-
-                  {error && (
-                    <div className="m-4 flex gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-                      <AlertCircle className="h-4 w-4 shrink-0" />
-                      <span>{error}</span>
-                    </div>
-                  )}
-
-                  {!loading && !error && trips.length === 0 && (
-                    <div className="p-4 text-sm text-slate-500">
-                      <p className="font-medium text-slate-700">No trips yet.</p>
-                      <p className="mt-1">
-                        Hit <strong>New trip</strong>, pick a vehicle, and select From and To locations directly from the map or search bar.
-                      </p>
-                    </div>
-                  )}
-
-                  {trips.map((t) => {
-                    const id = t.id || t._id;
-                    return (
-                      <div
-                        key={id}
-                        onClick={() => setSelectedId(id)}
-                        className={`group cursor-pointer border-b border-slate-100 p-4 transition hover:bg-slate-50 ${
-                          id === selectedId ? 'bg-sky-50' : ''
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="flex items-center gap-1.5 truncate text-sm font-medium text-slate-900">
-                              <span className="truncate">{shortPlace(t.origin.name)}</span>
-                              <Navigation className="h-3.5 w-3.5 shrink-0 text-sky-500" />
-                              <span className="truncate">{shortPlace(t.destination.name)}</span>
-                            </p>
-                            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 truncate text-xs text-slate-500">
-                              <span>
-                                {t.device?.name || 'Vehicle'}
-                                {t.distanceKm ? ` · ${t.distanceKm} km` : ''}
-                                {t.durationMin ? ` · ${formatDurationMin(t.durationMin)}` : ''}
-                              </span>
-                              {id === selectedId && actualDistanceKm != null && (
-                                <span className="font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded text-[11px] border border-amber-200">
-                                  Driven: {actualDistanceKm} km {actualDurationFormatted ? `(${actualDurationFormatted})` : ''}
-                                </span>
-                              )}
-                              {t.status === 'planned' && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
-                                  <Clock className="h-3 w-3" /> Planned
-                                </span>
-                              )}
-                              {t.status === 'active' && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-                                  <Navigation className="h-3 w-3" /> In Transit
-                                </span>
-                              )}
-                              {t.status === 'completed' && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700">
-                                  <CheckCircle2 className="h-3 w-3" /> Arrived
-                                </span>
-                              )}
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-1">
-                            {t.status === 'planned' && (() => {
-                              const deviceId = t.device?._id || t.device?.id || t.device;
-                              const hasActiveTrip = trips.some(
-                                (other) =>
-                                  (other.device?._id || other.device?.id || other.device) === deviceId &&
-                                  other.status === 'active'
-                              );
-                              return (
-                                <button
-                                  onClick={(e) => !hasActiveTrip && startTrip(t, e)}
-                                  disabled={hasActiveTrip}
-                                  title={hasActiveTrip ? "Complete current active trip on this device before starting a new one" : "Start trip"}
-                                  className={`rounded p-1 transition ${
-                                    hasActiveTrip
-                                      ? 'cursor-not-allowed text-slate-300'
-                                      : 'text-green-600 hover:bg-green-50 hover:text-green-700'
-                                  }`}
-                                >
-                                  <Play className="h-4 w-4" />
-                                </button>
-                              );
-                            })()}
-                            {t.status === 'active' && (
-                              <button
-                                onClick={(e) => endTrip(t, e)}
-                                title="End trip"
-                                className="rounded p-1 text-red-500 transition hover:bg-red-50 hover:text-red-600"
-                              >
-                                <Square className="h-4 w-4" />
-                              </button>
-                            )}
-                            <button
-                              onClick={(e) => removeTrip(t, e)}
-                              title="Delete trip"
-                              className="shrink-0 rounded p-1 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* A compact read of the selected trip, with the full
-                    breakdown one click away in a modal. Kept small here so
-                    the trip list above it stays usable. */}
-                {selected && timeBudget && (stops.length > 0 || untrackedMs > 0) && (
-                  <div className="shrink-0 border-t border-slate-200 p-4">
                     <button
-                      onClick={() => setShowBreakdown(true)}
-                      className="group flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 text-left transition hover:border-sky-300 hover:bg-sky-50"
+                      onClick={() => navigate('/add-new-trip')}
+                      className="mt-3 flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-sky-700"
                     >
-                      <div className="min-w-0 flex-1">
-                        <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
-                          <Clock className="h-4 w-4 text-sky-600" />
-                          Trip breakdown
-                        </p>
-
-                        {/* The same three-part split as the modal, so the
-                            shape of the trip is readable without opening it. */}
-                        <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-slate-200">
-                          <div
-                            className="bg-sky-500"
-                            style={{ width: `${(timeBudget.movingMs / timeBudget.totalMs) * 100}%` }}
-                          />
-                          <div
-                            className="bg-amber-500"
-                            style={{ width: `${(timeBudget.idleMs / timeBudget.totalMs) * 100}%` }}
-                          />
-                          <div
-                            className="bg-slate-300"
-                            style={{ width: `${(timeBudget.untrackedMs / timeBudget.totalMs) * 100}%` }}
-                          />
-                        </div>
-
-                        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
-                          <span className="font-semibold text-slate-700">
-                            {formatStopDuration(timeBudget.totalMs)} total
-                          </span>
-                          {stops.length > 0 && (
-                            <span className="text-amber-700">
-                              · {stops.length} stop{stops.length === 1 ? '' : 's'}
-                            </span>
-                          )}
-                          {untrackedMs > 0 && (
-                            <span className="text-slate-500">
-                              · {formatStopDuration(untrackedMs)} offline
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-sky-600" />
+                      <Plus className="h-3.5 w-3.5" /> Add a trip
                     </button>
                   </div>
                 )}
 
-                {selected && (
-                  <div className="border-t border-slate-200 p-4">
-                    <button
-                      onClick={createLink}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-sky-700"
+                {trips.map((t) => {
+                  const id = t.id || t._id;
+                  return (
+                    <div
+                      key={id}
+                      onClick={() => setSelectedId(id)}
+                      className={`group cursor-pointer border-b border-slate-100 p-4 transition hover:bg-slate-50 ${
+                        id === selectedId ? 'bg-sky-50' : ''
+                      }`}
                     >
-                      <Link2 className="h-4 w-4" /> Share this trip with client
-                    </button>
-                    {share?.error && <p className="mt-2 text-xs text-red-600">{share.error}</p>}
-                    {share?.url && (
-                      <div className="mt-3 rounded-lg bg-slate-50 p-2">
-                        <div className="flex items-center gap-2">
-                          <input
-                            readOnly
-                            value={share.url}
-                            onFocus={(e) => e.target.select()}
-                            className="min-w-0 flex-1 bg-transparent text-xs text-slate-600 outline-none"
-                          />
-                          <button onClick={copyLink} className="shrink-0 text-slate-500 hover:text-sky-600">
-                            {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="flex items-center gap-1.5 truncate text-sm font-medium text-slate-900">
+                            <span className="truncate">{shortPlace(t.origin.name)}</span>
+                            <Navigation className="h-3.5 w-3.5 shrink-0 text-sky-500" />
+                            <span className="truncate">{shortPlace(t.destination.name)}</span>
+                          </p>
+                          <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 truncate text-xs text-slate-500">
+                            <span>
+                              {t.device?.name || 'Vehicle'}
+                              {t.distanceKm ? ` · ${t.distanceKm} km` : ''}
+                              {t.durationMin ? ` · ${formatDurationMin(t.durationMin)}` : ''}
+                            </span>
+                            {id === selectedId && actualDistanceKm != null && (
+                              <span className="font-semibold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded text-[11px] border border-amber-200">
+                                Driven: {actualDistanceKm} km {actualDurationFormatted ? `(${actualDurationFormatted})` : ''}
+                              </span>
+                            )}
+                            {t.status === 'planned' && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                                <Clock className="h-3 w-3" /> Planned
+                              </span>
+                            )}
+                            {t.status === 'active' && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                                <Navigation className="h-3 w-3" /> In Transit
+                              </span>
+                            )}
+                            {t.status === 'completed' && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700">
+                                <CheckCircle2 className="h-3 w-3" /> Arrived
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          {t.status === 'planned' && (() => {
+                            const deviceId = t.device?._id || t.device?.id || t.device;
+                            const hasActiveTrip = trips.some(
+                              (other) =>
+                                (other.device?._id || other.device?.id || other.device) === deviceId &&
+                                other.status === 'active'
+                            );
+                            return (
+                              <button
+                                onClick={(e) => !hasActiveTrip && startTrip(t, e)}
+                                disabled={hasActiveTrip}
+                                title={hasActiveTrip ? "Complete current active trip on this device before starting a new one" : "Start trip"}
+                                className={`rounded p-1 transition ${
+                                  hasActiveTrip
+                                    ? 'cursor-not-allowed text-slate-300'
+                                    : 'text-green-600 hover:bg-green-50 hover:text-green-700'
+                                }`}
+                              >
+                                <Play className="h-4 w-4" />
+                              </button>
+                            );
+                          })()}
+                          {t.status === 'active' && (
+                            <button
+                              onClick={(e) => endTrip(t, e)}
+                              title="End trip"
+                              className="rounded p-1 text-red-500 transition hover:bg-red-50 hover:text-red-600"
+                            >
+                              <Square className="h-4 w-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => removeTrip(t, e)}
+                            title="Delete trip"
+                            className="shrink-0 rounded p-1 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
-                        <p className="mt-1 text-[11px] text-slate-400">
-                          Expires {new Date(share.expiresAt).toLocaleString()}
-                        </p>
                       </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* A compact read of the selected trip, with the full
+                  breakdown one click away in a modal. Kept small here so
+                  the trip list above it stays usable. */}
+              {selected && timeBudget && (stops.length > 0 || untrackedMs > 0) && (
+                <div className="shrink-0 border-t border-slate-200 p-4">
+                  <button
+                    onClick={() => setShowBreakdown(true)}
+                    className="group flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 text-left transition hover:border-sky-300 hover:bg-sky-50"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                        <Clock className="h-4 w-4 text-sky-600" />
+                        Trip breakdown
+                      </p>
+
+                      {/* The same three-part split as the modal, so the
+                          shape of the trip is readable without opening it. */}
+                      <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-slate-200">
+                        <div
+                          className="bg-sky-500"
+                          style={{ width: `${(timeBudget.movingMs / timeBudget.totalMs) * 100}%` }}
+                        />
+                        <div
+                          className="bg-amber-500"
+                          style={{ width: `${(timeBudget.idleMs / timeBudget.totalMs) * 100}%` }}
+                        />
+                        <div
+                          className="bg-slate-300"
+                          style={{ width: `${(timeBudget.untrackedMs / timeBudget.totalMs) * 100}%` }}
+                        />
+                      </div>
+
+                      <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+                        <span className="font-semibold text-slate-700">
+                          {formatStopDuration(timeBudget.totalMs)} total
+                        </span>
+                        {stops.length > 0 && (
+                          <span className="text-amber-700">
+                            · {stops.length} stop{stops.length === 1 ? '' : 's'}
+                          </span>
+                        )}
+                        {untrackedMs > 0 && (
+                          <span className="text-slate-500">
+                            · {formatStopDuration(untrackedMs)} offline
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-sky-600" />
+                  </button>
+                </div>
+              )}
+
+              {selected && (
+                <div className="border-t border-slate-200 p-4">
+                  <button
+                    onClick={createLink}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-sky-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-sky-700"
+                  >
+                    <Link2 className="h-4 w-4" /> Share this trip with client
+                  </button>
+                  {share?.error && <p className="mt-2 text-xs text-red-600">{share.error}</p>}
+                  {share?.url && (
+                    <div className="mt-3 rounded-lg bg-slate-50 p-2">
+                      <div className="flex items-center gap-2">
+                        <input
+                          readOnly
+                          value={share.url}
+                          onFocus={(e) => e.target.select()}
+                          className="min-w-0 flex-1 bg-transparent text-xs text-slate-600 outline-none"
+                        />
+                        <button onClick={copyLink} className="shrink-0 text-slate-500 hover:text-sky-600">
+                          {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                        </button>
+                      </div>
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        Expires {new Date(share.expiresAt).toLocaleString()}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
           </aside>
 
           {/* ---- map -------------------------------------------------- */}
           <div className="relative min-h-[420px] flex-1 overflow-hidden rounded-xl border border-slate-200">
             <GoogleFleetMap
-              devices={creating ? devices : (liveDevice ? [liveDevice] : [])}
+              devices={liveDevice ? [liveDevice] : []}
               selectedId={selectedId}
               route={mapRoute}
               fitTo={framePoints}
-              onClick={creating ? handleMapClick : undefined}
-              pickingMode={Boolean(creating && pickingTarget)}
             />
 
-            {/* creation prompt or trip status banner over map */}
-            {creating ? (
-              <div className="pointer-events-none absolute left-1/2 top-4 z-[1000] -translate-x-1/2">
-                {geocodingPick ? (
-                  <div className="flex items-center gap-2 rounded-full bg-slate-900/90 px-4 py-2 text-sm text-white shadow-md backdrop-blur-sm animate-pulse">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="font-medium">Finding location address…</span>
-                  </div>
-                ) : pickingTarget === 'origin' ? (
-                  <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-emerald-600 px-4 py-2 text-sm text-white shadow-lg backdrop-blur-sm animate-pulse">
-                    <MapPin className="h-4 w-4" />
-                    <span className="font-medium">Click on map to select "From" location</span>
-                    <button onClick={() => setPickingTarget(null)} className="ml-1 rounded-full p-0.5 hover:bg-emerald-700">
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ) : pickingTarget === 'destination' ? (
-                  <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-rose-600 px-4 py-2 text-sm text-white shadow-lg backdrop-blur-sm animate-pulse">
-                    <Flag className="h-4 w-4" />
-                    <span className="font-medium">Click on map to select "To" location</span>
-                    <button onClick={() => setPickingTarget(null)} className="ml-1 rounded-full p-0.5 hover:bg-rose-700">
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ) : createOrigin || createDestination ? (
-                  <div className="flex items-center gap-2 rounded-full bg-white/95 px-4 py-2 text-sm shadow-md backdrop-blur-sm">
-                    {createOrigin ? (
-                      <>
-                        <MapPin className="h-4 w-4 text-green-600" />
-                        <span className="font-medium text-slate-900">{shortPlace(createOrigin.name)}</span>
-                      </>
-                    ) : (
-                      <span className="text-slate-400">Set From</span>
-                    )}
-                    <Navigation className="h-4 w-4 text-sky-500" />
-                    {createDestination ? (
-                      <>
-                        <Flag className="h-4 w-4 text-red-600" />
-                        <span className="font-medium text-slate-900">{shortPlace(createDestination.name)}</span>
-                      </>
-                    ) : (
-                      <span className="text-slate-400">Set To</span>
-                    )}
-                    {createRoute?.distanceKm ? (
-                      <span className="ml-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                        {createRoute.distanceKm} km
-                      </span>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-
             {/* Legend for the two lines with actual driven path stats */}
-            {!creating && selected && (
+            {selected && (
               <div className="absolute bottom-4 left-4 z-[1000] rounded-xl bg-white/95 p-3.5 text-xs shadow-lg backdrop-blur-sm border border-slate-200/80 space-y-2">
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-2">

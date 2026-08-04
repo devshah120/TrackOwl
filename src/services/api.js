@@ -94,7 +94,9 @@ export const trips = {
 
   // origin/destination are { name, lat, lng } from geo.searchPlaces; route is the
   // OSRM result from geo.getRoute (may be null if routing was unavailable).
-  create: ({ deviceId, origin, destination, route, note = '' }) =>
+  // routePolyline/distanceKm/durationMin may also be passed at the top level;
+  // an explicit value wins over the one carried on `route`.
+  create: ({ deviceId, origin, destination, route, note = '', routePolyline, distanceKm, durationMin }) =>
     apiCall('/trips', {
       method: 'POST',
       body: JSON.stringify({
@@ -102,9 +104,9 @@ export const trips = {
         origin,
         destination,
         note,
-        routePolyline: route?.polyline,
-        distanceKm: route?.distanceKm,
-        durationMin: route?.durationMin,
+        routePolyline: routePolyline ?? route?.polyline,
+        distanceKm: distanceKm ?? route?.distanceKm,
+        durationMin: durationMin ?? route?.durationMin,
       }),
     }),
 
