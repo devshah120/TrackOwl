@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { Topbar } from '../components/Topbar';
+import { billing } from '../services/api';
 
 export function AddNewTrip() {
   const navigate = useNavigate();
@@ -11,6 +12,8 @@ export function AddNewTrip() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   // Driver data from FleetAndDrivers
   const [drivers] = useState([
@@ -193,10 +196,41 @@ export function AddNewTrip() {
     }));
   };
 
-  const handleSubmit = (e) => {
+  // The billing record only tracks payment state, so the trip's own
+  // In Transit/Delivered status is not what the Status column shows —
+  // Payment Status is. 'Completed' is that form's wording for fully paid.
+  const toBillingStatus = (paymentStatus) =>
+    paymentStatus === 'Completed' ? 'Paid' : paymentStatus === 'Partial' ? 'Partial' : 'Pending';
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Form Data:', formData);
-    navigate('/trips-and-documents');
+    setSaveError('');
+
+    // Freight total is filled by the Calculate button; fall back to
+    // quantity × rate so a trip is never saved with a zero amount.
+    const amount =
+      parseFloat(formData.totalFreightAmount) ||
+      (parseFloat(formData.quantity) || 0) * (parseFloat(formData.freightRate) || 0);
+
+    if (!amount) {
+      setSaveError('Enter a freight rate and quantity, or click "Calculate Total Freight".');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await billing.create({
+        truck: formData.truckNumber,
+        partyName: formData.buyerName,
+        amount,
+        date: formData.tripDate,
+        status: toBillingStatus(formData.paymentStatus),
+      });
+      navigate('/trips-and-documents');
+    } catch (err) {
+      setSaveError(err.message || 'Failed to create trip');
+      setSaving(false);
+    }
   };
 
   return (
@@ -631,6 +665,12 @@ export function AddNewTrip() {
               </div>
             </div>
 
+            {saveError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+                {saveError}
+              </div>
+            )}
+
             {/* Form Actions */}
             <div className="flex gap-4">
               <button
@@ -642,9 +682,10 @@ export function AddNewTrip() {
               </button>
               <button
                 type="submit"
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                disabled={saving}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-60"
               >
-                Create Trip
+                {saving ? 'Creating...' : 'Create Trip'}
               </button>
             </div>
           </form>
