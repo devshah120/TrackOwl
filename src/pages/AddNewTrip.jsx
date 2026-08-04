@@ -1,13 +1,23 @@
 import { useState, useEffect } from 'react';
 import { ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell, ArrowLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { Topbar } from '../components/Topbar';
 import { billing, drivers as driversApi } from '../services/api';
 
+// Dates come back from the API as ISO strings but the <input type="date">
+// fields want plain YYYY-MM-DD.
+const asDateInput = (value) => (value ? String(value).slice(0, 10) : '');
+
+// Numeric fields render as text inputs, so 0 defaults are shown as empty
+// rather than a literal "0" the user has to clear before typing.
+const asNumberInput = (value) => (value === 0 || value === undefined || value === null ? '' : String(value));
+
 export function AddNewTrip() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const isEditing = Boolean(id);
   const { user, logout } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -46,6 +56,111 @@ export function AddNewTrip() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Editing an existing trip: pull the saved record and refill the whole form,
+  // so the same page serves both "create" and "edit" rather than a cut-down
+  // modal that could only reach a handful of fields.
+  const [loadingTrip, setLoadingTrip] = useState(isEditing);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await billing.list();
+        const trip = res.billingTrips.find((t) => (t._id || t.id) === id);
+        if (cancelled) return;
+        if (!trip) {
+          setSaveError('That trip could not be found.');
+          return;
+        }
+
+        const r = trip.references || {};
+        const g = trip.goods || {};
+        const p = trip.payment || {};
+
+        setFormData((prev) => ({
+          ...prev,
+          tripDate: asDateInput(trip.date),
+          truckNumber: trip.truck || '',
+          driverName: trip.driver?.name || '',
+          driverMobile: trip.driver?.mobile || '',
+          driverLicenseNumber: trip.driver?.licenseNumber || '',
+          // The route field is a single "From → To" string on this form.
+          route: [trip.fromLocation, trip.toLocation].filter(Boolean).join(' → '),
+          loadingDate: asDateInput(trip.loadingDate),
+          deliveryDate: asDateInput(trip.deliveryDate),
+
+          lrNumber: trip.lr || '',
+          billNumber: trip.bill || '',
+          invoiceNo: trip.invoiceNo || '',
+          gstPayableBy: trip.gstPayableBy || 'Consignee',
+          lrCharges: asNumberInput(trip.lrCharges),
+          gstRate: asNumberInput(trip.gstRate),
+
+          deliveryNote: r.deliveryNote || '',
+          paymentTerms: r.paymentTerms || '',
+          supplierRef: r.supplierRef || '',
+          otherRef: r.otherRef || '',
+          buyerOrderNo: r.buyerOrderNo || '',
+          buyerOrderDate: r.buyerOrderDate || '',
+          despatchDocNo: r.despatchDocNo || '',
+          deliveryNoteDate: r.deliveryNoteDate || '',
+          despatchedThrough: r.despatchedThrough || '',
+          destination: r.destination || '',
+          termsOfDelivery: r.termsOfDelivery || '',
+
+          supplierName: trip.consignor?.name || '',
+          supplierGst: trip.consignor?.gst || '',
+          supplierAddress: trip.consignor?.address || '',
+          supplierContact: trip.consignor?.contact || '',
+
+          buyerName: trip.consignee?.name || trip.partyName || '',
+          buyerGst: trip.consignee?.gst || '',
+          buyerAddress: trip.consignee?.address || '',
+          buyerContact: trip.consignee?.contact || '',
+
+          goodsDescription: g.description || '',
+          quantity: asNumberInput(g.quantity),
+          unit: g.unit || 'Kg',
+          totalWeight: asNumberInput(g.weight),
+          weightUnit: g.weightUnit || 'Kg',
+          declaredValue: asNumberInput(g.declaredValue),
+          freightRate: asNumberInput(g.freightRate),
+          totalFreightAmount: asNumberInput(trip.amount),
+
+          paymentMethod: p.method || 'Bank Transfer',
+          // Status on the record is payment state; this form words fully paid
+          // as "Completed" (see toBillingStatus).
+          paymentStatus: trip.status === 'Paid' ? 'Completed' : trip.status || 'Pending',
+          advanceAmount: asNumberInput(p.advance),
+          balanceAmount: asNumberInput(p.balance),
+          paymentNotes: p.notes || '',
+        }));
+      } catch (err) {
+        if (!cancelled) setSaveError(err.message || 'Failed to load trip');
+      } finally {
+        if (!cancelled) setLoadingTrip(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [id, isEditing]);
+
+  // The saved trip stores the driver's details, not which roster entry they
+  // came from. Once both have loaded, match them back up so the dropdown shows
+  // the right driver instead of sitting blank on an otherwise filled form.
+  useEffect(() => {
+    if (!isEditing || !drivers.length) return;
+    setFormData((prev) => {
+      if (prev.driverId || !prev.driverName) return prev;
+      const match = drivers.find(
+        (d) =>
+          d.name === prev.driverName &&
+          (!prev.driverMobile || d.mobile === prev.driverMobile)
+      );
+      return match ? { ...prev, driverId: match.id } : prev;
+    });
+  }, [drivers, isEditing]);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -234,7 +349,7 @@ export function AddNewTrip() {
 
     setSaving(true);
     try {
-      await billing.create({
+      const payload = {
         truck: formData.truckNumber,
         partyName: formData.buyerName,
         amount,
@@ -297,10 +412,16 @@ export function AddNewTrip() {
           balance: formData.balanceAmount,
           notes: formData.paymentNotes,
         },
-      });
+      };
+
+      if (isEditing) {
+        await billing.update(id, payload);
+      } else {
+        await billing.create(payload);
+      }
       navigate('/trips-and-documents');
     } catch (err) {
-      setSaveError(err.message || 'Failed to create trip');
+      setSaveError(err.message || (isEditing ? 'Failed to save trip' : 'Failed to create trip'));
       setSaving(false);
     }
   };
@@ -322,13 +443,24 @@ export function AddNewTrip() {
               <ArrowLeft className="w-5 h-5 text-slate-600" />
             </button>
             <div>
-              <h1 className="text-3xl font-bold text-slate-900">Add New Trip</h1>
-              <p className="text-slate-600 mt-1">Fill in all the details to create a new trip</p>
+              <h1 className="text-3xl font-bold text-slate-900">
+                {isEditing ? 'Edit Trip' : 'Add New Trip'}
+              </h1>
+              <p className="text-slate-600 mt-1">
+                {isEditing
+                  ? 'Update any detail of this trip, its documents, or its payment'
+                  : 'Fill in all the details to create a new trip'}
+              </p>
             </div>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-6">
+          {loadingTrip && (
+            <div className="text-center py-12 text-slate-500">Loading trip...</div>
+          )}
+
+          {/* Form. Hidden until an edited trip has loaded, so the fields are
+              never briefly blank before being filled in. */}
+          <form onSubmit={handleSubmit} className={`space-y-6 ${loadingTrip ? 'hidden' : ''}`}>
             {/* Basic Trip Information */}
             <div className="bg-white rounded-lg border border-slate-200 p-6">
               <h2 className="text-lg font-semibold text-slate-900 mb-4">Basic Trip Information</h2>
@@ -904,7 +1036,9 @@ export function AddNewTrip() {
                 disabled={saving}
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium disabled:opacity-60"
               >
-                {saving ? 'Creating...' : 'Create Trip'}
+                {saving
+                  ? (isEditing ? 'Saving...' : 'Creating...')
+                  : (isEditing ? 'Save Changes' : 'Create Trip')}
               </button>
             </div>
           </form>

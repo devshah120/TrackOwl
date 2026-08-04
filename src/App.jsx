@@ -75,6 +75,14 @@ function App() {
         }
       />
       <Route
+        path="/add-new-trip/:id"
+        element={
+          <ProtectedRoute clientOnly>
+            <AddNewTrip />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/daily-ledger"
         element={
           <ProtectedRoute clientOnly>

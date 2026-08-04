@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { Plus, Search, Edit2, Trash2, FileText, Download, Eye, Filter, ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell, IndianRupee } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -21,7 +21,6 @@ export function TripsAndDocuments() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -30,9 +29,7 @@ export function TripsAndDocuments() {
   const [downloading, setDownloading] = useState('');
 
   const [paymentForm, setPaymentForm] = useState({ paymentType: 'Full Payment', amount: '', paymentMethod: 'Cash', date: '' });
-  const [editForm, setEditForm] = useState({ truck: '', lr: '', bill: '', partyName: '', amount: '', date: '', status: 'Pending' });
   const [savingPayment, setSavingPayment] = useState(false);
-  const [savingEdit, setSavingEdit] = useState(false);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -161,35 +158,9 @@ export function TripsAndDocuments() {
     }
   };
 
-  const openEditModal = (trip) => {
-    setSelectedTrip(trip);
-    setEditForm({
-      truck: trip.truck,
-      lr: trip.lr || '',
-      bill: trip.bill || '',
-      partyName: trip.partyName,
-      amount: String(trip.amount),
-      date: trip.date ? trip.date.slice(0, 10) : '',
-      status: trip.status,
-    });
-    setShowEditModal(true);
-  };
-
-  const handleSaveEdit = async () => {
-    if (!selectedTrip) return;
-    setSavingEdit(true);
-    try {
-      const tripId = selectedTrip._id || selectedTrip.id;
-      const payload = { ...editForm, amount: Number(editForm.amount) };
-      const res = await billing.update(tripId, payload);
-      setTrips((prev) => prev.map((t) => ((t._id || t.id) === tripId ? res.billingTrip : t)));
-      setShowEditModal(false);
-    } catch (err) {
-      setLoadError(err.message || 'Failed to save trip');
-    } finally {
-      setSavingEdit(false);
-    }
-  };
+  // Editing happens on the full Add/Edit Trip page (/add-new-trip/:id) rather
+  // than in a modal here, so every field of the trip is reachable â€” the modal
+  // could only reach truck, LR, bill, party, amount, date and status.
 
   return (
     <div className="flex flex-col h-screen bg-slate-50">
@@ -303,7 +274,7 @@ export function TripsAndDocuments() {
                     <td className="px-6 py-4 text-sm text-slate-700">{trip.lr}</td>
                     <td className="px-6 py-4 text-sm text-slate-700">{trip.bill}</td>
                     <td className="px-6 py-4 text-sm text-slate-700">{trip.partyName}</td>
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-900">₹{trip.amount.toLocaleString()}</td>
+                    <td className="px-6 py-4 text-sm font-semibold text-slate-900">â‚¹{trip.amount.toLocaleString()}</td>
                     <td className="px-6 py-4 text-sm">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(trip.status)}`}>
                         {trip.status}
@@ -327,7 +298,7 @@ export function TripsAndDocuments() {
                           <Download className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => openEditModal(trip)}
+                          onClick={() => navigate(`/add-new-trip/${tripId}`)}
                           className="p-2 hover:bg-slate-200 text-slate-600 rounded transition-colors"
                           title="Edit"
                         >
@@ -403,7 +374,7 @@ export function TripsAndDocuments() {
                 onClick={() => setShowPaymentModal(false)}
                 className="text-slate-500 hover:text-slate-700"
               >
-                ✕
+                âœ•
               </button>
             </div>
             <div className="p-6 space-y-4">
@@ -416,7 +387,7 @@ export function TripsAndDocuments() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm text-slate-600">Total Amount</p>
-                      <p className="text-lg font-semibold text-slate-900">₹{selectedTrip.amount.toLocaleString()}</p>
+                      <p className="text-lg font-semibold text-slate-900">â‚¹{selectedTrip.amount.toLocaleString()}</p>
                     </div>
                     <div>
                       <p className="text-sm text-slate-600">Status</p>
@@ -439,7 +410,7 @@ export function TripsAndDocuments() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Amount (₹)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Amount (â‚¹)</label>
                 <input
                   type="number"
                   placeholder="0"
@@ -483,110 +454,6 @@ export function TripsAndDocuments() {
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
                 >
                   {savingPayment ? 'Saving...' : 'Record Payment'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Trip Modal */}
-      {showEditModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-            <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-900">Edit Trip</h2>
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="text-slate-500 hover:text-slate-700"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Truck</label>
-                <input
-                  type="text"
-                  value={editForm.truck}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, truck: e.target.value }))}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">LR</label>
-                  <input
-                    type="text"
-                    value={editForm.lr}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, lr: e.target.value }))}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Bill</label>
-                  <input
-                    type="text"
-                    value={editForm.bill}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, bill: e.target.value }))}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Party Name</label>
-                <input
-                  type="text"
-                  value={editForm.partyName}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, partyName: e.target.value }))}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Amount (₹)</label>
-                  <input
-                    type="number"
-                    value={editForm.amount}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, amount: e.target.value }))}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Date</label>
-                  <input
-                    type="date"
-                    value={editForm.date}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, date: e.target.value }))}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Status</label>
-                <select
-                  value={editForm.status}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, status: e.target.value }))}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option>Paid</option>
-                  <option>Partial</option>
-                  <option>Pending</option>
-                </select>
-              </div>
-              <div className="pt-4 flex gap-3">
-                <button
-                  onClick={() => setShowEditModal(false)}
-                  className="flex-1 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveEdit}
-                  disabled={savingEdit}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
-                >
-                  {savingEdit ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </div>
