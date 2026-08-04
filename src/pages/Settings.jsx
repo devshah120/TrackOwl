@@ -1,10 +1,34 @@
-import { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, Filter, ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell, Download, Upload, AlertCircle, Save, User, Building, CreditCard } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Plus, Search, Edit2, Trash2, Filter, ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell, Download, Upload, AlertCircle, Save, User, Building, CreditCard, PenTool, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { Topbar } from '../components/Topbar';
+import { SignaturePad } from '../components/SignaturePad';
 import { user as userApi } from '../services/api';
+
+// Uploaded signatures are downscaled in the browser before they are sent, so a
+// photo of a signed sheet does not land in the database at full camera size.
+const MAX_SIGNATURE_WIDTH = 600;
+
+const downscaleImage = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onerror = () => reject(new Error('Could not read that file'));
+  reader.onload = () => {
+    const img = new Image();
+    img.onerror = () => reject(new Error('That file is not a readable image'));
+    img.onload = () => {
+      const scale = Math.min(1, MAX_SIGNATURE_WIDTH / img.width);
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+});
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -77,6 +101,15 @@ export function SettingsPage() {
     branchName: '',
   });
 
+  // Signature state — `savedSignature` is what the server holds, `mode` picks
+  // between the drawing pad and an uploaded image.
+  const [signature, setSignature] = useState({ dataUrl: '', signatoryName: '' });
+  const [signatureMode, setSignatureMode] = useState('draw');
+  const [pendingUpload, setPendingUpload] = useState('');
+  const [signatureError, setSignatureError] = useState('');
+  const padRef = useRef(null);
+  const fileInputRef = useRef(null);
+
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState('');
 
@@ -101,6 +134,10 @@ export function SettingsPage() {
           bankName: u.bankDetails?.bankName || '',
           ifscCode: u.bankDetails?.ifscCode || '',
           branchName: u.bankDetails?.branchName || '',
+        });
+        setSignature({
+          dataUrl: u.signature?.dataUrl || '',
+          signatoryName: u.signature?.signatoryName || '',
         });
       } catch (err) {
         if (!cancelled) setProfileError(err.message || 'Failed to load profile');
@@ -170,6 +207,76 @@ export function SettingsPage() {
       setTimeout(() => setSuccessMessage(''), 3000);
     } catch (err) {
       setProfileError(err.message || 'Failed to save bank details');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSignatureFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setSignatureError('');
+
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+      setSignatureError('Please choose a PNG or JPG image.');
+      event.target.value = '';
+      return;
+    }
+
+    try {
+      setPendingUpload(await downscaleImage(file));
+    } catch (err) {
+      setSignatureError(err.message || 'Could not read that image');
+    } finally {
+      // Reset so re-picking the same file still fires a change event.
+      event.target.value = '';
+    }
+  };
+
+  const handleSaveSignature = async () => {
+    setSignatureError('');
+
+    // Whichever tab is active supplies the image being saved.
+    const dataUrl = signatureMode === 'draw'
+      ? padRef.current?.toDataUrl()
+      : pendingUpload || signature.dataUrl;
+
+    if (!dataUrl) {
+      setSignatureError(signatureMode === 'draw'
+        ? 'Draw your signature before saving.'
+        : 'Choose a signature image before saving.');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await userApi.updateProfile({
+        signature: { dataUrl, signatoryName: signature.signatoryName },
+      });
+      setSignature({ ...signature, dataUrl });
+      setPendingUpload('');
+      padRef.current?.clear();
+      setSuccessMessage('Signature saved successfully!');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      setSignatureError(err.message || 'Failed to save signature');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemoveSignature = async () => {
+    setIsSaving(true);
+    setSignatureError('');
+    try {
+      await userApi.updateProfile({ signature: { dataUrl: '' } });
+      setSignature({ dataUrl: '', signatoryName: '' });
+      setPendingUpload('');
+      padRef.current?.clear();
+      setSuccessMessage('Signature removed.');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      setSignatureError(err.message || 'Failed to remove signature');
     } finally {
       setIsSaving(false);
     }
@@ -302,6 +409,17 @@ export function SettingsPage() {
               Company Details
             </button>
             <button
+              onClick={() => setActiveTab('signature')}
+              className={`px-4 py-3 font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
+                activeTab === 'signature'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <PenTool className="w-4 h-4" />
+              Signature
+            </button>
+            <button
               onClick={() => setActiveTab('bank')}
               className={`px-4 py-3 font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
                 activeTab === 'bank'
@@ -418,6 +536,144 @@ export function SettingsPage() {
                   >
                     <Save className="w-4 h-4" />
                     {isSaving ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Signature Tab */}
+          {activeTab === 'signature' && (
+            <div className="bg-white rounded-lg border border-slate-200 p-6">
+              <h2 className="text-xl font-semibold text-slate-900 mb-6">Authorised Signatory</h2>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-blue-800">
+                  This signature is stamped on the signatory area of generated Lorry Receipts,
+                  invoices and goods declarations. Leave it empty to sign documents by hand.
+                </p>
+              </div>
+
+              {signatureError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm text-red-700 flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  {signatureError}
+                </div>
+              )}
+
+              {/* Current saved signature */}
+              {signature.dataUrl && (
+                <div className="mb-6">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Current Signature</label>
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div className="border border-slate-200 rounded-lg bg-white px-4 py-3">
+                      <img
+                        src={signature.dataUrl}
+                        alt="Saved signature"
+                        className="h-16 max-w-[240px] object-contain"
+                      />
+                    </div>
+                    <button
+                      onClick={handleRemoveSignature}
+                      disabled={isSaving}
+                      className="flex items-center gap-2 px-3 py-2 text-sm border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-50"
+                    >
+                      <Trash className="w-4 h-4" />
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Draw / Upload switch */}
+              <div className="inline-flex rounded-lg border border-slate-200 p-1 bg-slate-50 mb-4">
+                {[['draw', 'Draw'], ['upload', 'Upload']].map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    onClick={() => { setSignatureMode(mode); setSignatureError(''); }}
+                    className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                      signatureMode === mode
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="space-y-4">
+                {signatureMode === 'draw' ? (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      {signature.dataUrl ? 'Draw a new signature' : 'Draw your signature'}
+                    </label>
+                    <SignaturePad ref={padRef} onChange={() => setSignatureError('')} />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">
+                      Upload signature image
+                    </label>
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="rounded-lg border-2 border-dashed border-slate-300 bg-slate-50 p-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/40 transition-colors"
+                    >
+                      {pendingUpload ? (
+                        <img
+                          src={pendingUpload}
+                          alt="Signature preview"
+                          className="h-20 mx-auto object-contain"
+                        />
+                      ) : (
+                        <>
+                          <Upload className="w-6 h-6 mx-auto text-slate-400 mb-2" />
+                          <p className="text-sm text-slate-600">Click to choose a PNG or JPG file</p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            A signature on white paper works best. Large images are resized automatically.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg"
+                      onChange={handleSignatureFile}
+                      className="hidden"
+                    />
+                    {pendingUpload && (
+                      <button
+                        onClick={() => setPendingUpload('')}
+                        className="mt-2 text-sm text-slate-600 hover:text-slate-900"
+                      >
+                        Choose a different file
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Signatory Name <span className="font-normal text-slate-500">(optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={signature.signatoryName}
+                    onChange={(e) => setSignature({ ...signature, signatoryName: e.target.value })}
+                    placeholder="Name printed under the signature"
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="pt-4 border-t border-slate-200">
+                  <button
+                    onClick={handleSaveSignature}
+                    disabled={isSaving}
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    {isSaving ? 'Saving...' : 'Save Signature'}
                   </button>
                 </div>
               </div>
