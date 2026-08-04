@@ -79,6 +79,20 @@ export function AddNewTrip() {
     invoiceNo: '',
     gstPayableBy: 'Consignee',
     lrCharges: '',
+    gstRate: '',
+
+    // Reference boxes across the head of the tax invoice.
+    deliveryNote: '',
+    paymentTerms: '',
+    supplierRef: '',
+    otherRef: '',
+    buyerOrderNo: '',
+    buyerOrderDate: '',
+    despatchDocNo: '',
+    deliveryNoteDate: '',
+    despatchedThrough: '',
+    destination: '',
+    termsOfDelivery: '',
 
     // Party Details - Supplier
     supplierName: '',
@@ -246,6 +260,20 @@ export function AddNewTrip() {
         toLocation: (to || '').trim(),
         gstPayableBy: formData.gstPayableBy,
         lrCharges: formData.lrCharges,
+        gstRate: formData.gstRate,
+        references: {
+          deliveryNote: formData.deliveryNote,
+          paymentTerms: formData.paymentTerms || formData.paymentMethod,
+          supplierRef: formData.supplierRef,
+          otherRef: formData.otherRef,
+          buyerOrderNo: formData.buyerOrderNo,
+          buyerOrderDate: formData.buyerOrderDate,
+          despatchDocNo: formData.despatchDocNo,
+          deliveryNoteDate: formData.deliveryNoteDate,
+          despatchedThrough: formData.despatchedThrough || formData.truckNumber,
+          destination: formData.destination,
+          termsOfDelivery: formData.termsOfDelivery,
+        },
         loadingDate: formData.loadingDate,
         deliveryDate: formData.deliveryDate,
 
@@ -438,6 +466,65 @@ export function AddNewTrip() {
                     name="lrCharges"
                     placeholder="0"
                     value={formData.lrCharges}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">GST Rate (%)</label>
+                  <input
+                    type="number"
+                    name="gstRate"
+                    placeholder="e.g., 5"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={formData.gstRate}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Applied to freight + LR charges on the invoice.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Invoice References */}
+            <div className="bg-white rounded-lg border border-slate-200 p-6">
+              <h2 className="text-lg font-semibold text-slate-900 mb-1">Invoice References</h2>
+              <p className="text-sm text-slate-500 mb-4">
+                Optional. These fill the reference boxes across the top of the Tax Invoice.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {[
+                  { name: 'deliveryNote', label: 'Delivery Note', placeholder: 'e.g., DN-77' },
+                  { name: 'paymentTerms', label: 'Mode / Terms of Payment', placeholder: 'e.g., 30 Days Credit' },
+                  { name: 'supplierRef', label: "Supplier's Ref.", placeholder: 'e.g., SR-12' },
+                  { name: 'otherRef', label: 'Other Reference(s)', placeholder: 'Optional' },
+                  { name: 'buyerOrderNo', label: "Buyer's Order No.", placeholder: 'e.g., PO-9081' },
+                  { name: 'buyerOrderDate', label: "Buyer's Order Date", placeholder: 'e.g., 01-Aug-26' },
+                  { name: 'despatchDocNo', label: 'Despatch Document No.', placeholder: 'e.g., DD-455' },
+                  { name: 'deliveryNoteDate', label: 'Delivery Note Date', placeholder: 'e.g., 02-Aug-26' },
+                  { name: 'destination', label: 'Destination', placeholder: 'Defaults to the route "To"' },
+                ].map((field) => (
+                  <div key={field.name}>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">{field.label}</label>
+                    <input
+                      type="text"
+                      name={field.name}
+                      placeholder={field.placeholder}
+                      value={formData[field.name]}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                ))}
+                <div className="md:col-span-2 lg:col-span-3">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Terms of Delivery</label>
+                  <input
+                    type="text"
+                    name="termsOfDelivery"
+                    placeholder="e.g., Door delivery at consignee premises"
+                    value={formData.termsOfDelivery}
                     onChange={handleInputChange}
                     className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
