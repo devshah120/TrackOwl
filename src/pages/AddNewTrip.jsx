@@ -755,7 +755,7 @@ export function AddNewTrip() {
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2">
+                    <div className="grid grid-cols-1 items-stretch lg:grid-cols-2">
                       {/* Left: the two location fields */}
                       <div className="space-y-4 px-6 pb-6">
                         <PlaceSearchInput
@@ -819,15 +819,18 @@ export function AddNewTrip() {
                         )}
                       </div>
 
-                      {/* Right: the map */}
-                      <div className="relative min-h-[320px] border-t border-slate-200 lg:border-l lg:border-t-0">
+                      {/* Right: the map. The height is set explicitly rather
+                          than with h-full — the grid row is sized by the fields
+                          on the left, so a percentage height has nothing to
+                          resolve against and the map collapses to nothing. */}
+                      <div className="relative h-[420px] border-t border-slate-200 lg:h-auto lg:min-h-[420px] lg:border-l lg:border-t-0">
                         <GoogleFleetMap
                           devices={devices}
                           route={mapRoute}
                           fitTo={framePoints}
                           onClick={handleMapClick}
                           pickingMode={Boolean(pickingTarget)}
-                          className="h-full min-h-[320px] w-full"
+                          className="absolute inset-0 h-full w-full"
                         />
 
                         {/* Picking prompt over the map */}
