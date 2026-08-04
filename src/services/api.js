@@ -118,7 +118,10 @@ export const trips = {
   remove: (id) => apiCall(`/trips/${id}`, { method: 'DELETE' }),
 };
 
-// Fleet & Drivers — a truck roster, each with its embedded driver.
+// Fleet — a truck roster. Each truck comes back with a `drivers` array; the
+// `driver` field on it is the primary driver, kept for screens that only have
+// room for one. Send the whole `drivers` array back on create/update and the
+// server replaces the truck's roster with it.
 export const fleet = {
   list: () => apiCall('/trucks'),
 
@@ -129,6 +132,28 @@ export const fleet = {
     apiCall(`/trucks/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
 
   remove: (id) => apiCall(`/trucks/${id}`, { method: 'DELETE' }),
+};
+
+// Drivers — their own roster, so one truck can carry several and a driver can
+// be reassigned between trucks. Editing a truck's whole roster at once goes
+// through `fleet.update`; these are for one driver at a time.
+export const drivers = {
+  // Optional filters: { truck: '<truckId>' } or { unassigned: true }.
+  list: ({ truck, unassigned } = {}) => {
+    const params = new URLSearchParams();
+    if (truck) params.set('truck', truck);
+    if (unassigned) params.set('unassigned', '1');
+    const qs = params.toString();
+    return apiCall(`/drivers${qs ? `?${qs}` : ''}`);
+  },
+
+  create: (payload) =>
+    apiCall('/drivers', { method: 'POST', body: JSON.stringify(payload) }),
+
+  update: (id, payload) =>
+    apiCall(`/drivers/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  remove: (id) => apiCall(`/drivers/${id}`, { method: 'DELETE' }),
 };
 
 // Daily Ledger — income/expense entries.

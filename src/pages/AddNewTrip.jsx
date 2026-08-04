@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { Topbar } from '../components/Topbar';
-import { billing } from '../services/api';
+import { billing, drivers as driversApi } from '../services/api';
 
 export function AddNewTrip() {
   const navigate = useNavigate();
@@ -15,49 +15,37 @@ export function AddNewTrip() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
-  // Driver data from FleetAndDrivers
-  const [drivers] = useState([
-    {
-      id: 'DRV001',
-      name: 'Rajesh Kumar',
-      mobile: '9876543210',
-      salary: 15000,
-      licenseNumber: 'DL-0219950000123',
-      licenseExpiry: '2027-06-30',
-      truckNumber: 'MH-01-AB-1234',
-      truckModel: 'Tata 407',
-    },
-    {
-      id: 'DRV002',
-      name: 'Priya Singh',
-      mobile: '9876543211',
-      salary: 14500,
-      licenseNumber: 'DL-0120880000456',
-      licenseExpiry: '2026-12-15',
-      truckNumber: 'MH-01-CD-5678',
-      truckModel: 'Ashok Leyland 3318',
-    },
-    {
-      id: 'DRV003',
-      name: 'Amit Patel',
-      mobile: '9876543212',
-      salary: 13500,
-      licenseNumber: 'DL-0119920000789',
-      licenseExpiry: '2028-03-10',
-      truckNumber: 'MH-01-EF-9012',
-      truckModel: 'Mahindra Bolero Pik-Up',
-    },
-    {
-      id: 'DRV004',
-      name: 'Vikram Sharma',
-      mobile: '9876543213',
-      salary: 15500,
-      licenseNumber: 'DL-0119880000321',
-      licenseExpiry: '2026-09-05',
-      truckNumber: 'MH-01-GH-3456',
-      truckModel: 'Tata 709',
-    },
-  ]);
+  // The real driver roster. A truck can carry several drivers, so this lists
+  // every driver the client has and shows which truck each is assigned to —
+  // picking one fills in the truck as well.
+  const [drivers, setDrivers] = useState([]);
+  const [driversError, setDriversError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await driversApi.list();
+        if (cancelled) return;
+        setDrivers(
+          res.drivers.map((d) => ({
+            id: d._id || d.id,
+            name: d.name,
+            mobile: d.mobile || '',
+            salary: d.salary,
+            licenseNumber: d.licenseNumber || '',
+            licenseExpiry: d.licenseExpiry ? d.licenseExpiry.slice(0, 10) : '',
+            truckNumber: d.truck?.number || '',
+            truckModel: d.truck?.model || '',
+            isPrimary: d.isPrimary,
+          }))
+        );
+      } catch (err) {
+        if (!cancelled) setDriversError(err.message || 'Failed to load drivers');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -545,13 +533,21 @@ export function AddNewTrip() {
                     className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     required
                   >
-                    <option value="">Choose a driver...</option>
+                    <option value="">
+                      {drivers.length ? 'Choose a driver...' : 'No drivers on the roster yet'}
+                    </option>
+                    {/* Trucks can share several drivers, so the truck number is
+                        part of the label to tell them apart. */}
                     {drivers.map((driver) => (
                       <option key={driver.id} value={driver.id}>
                         {driver.name}
+                        {driver.truckNumber ? ` — ${driver.truckNumber}` : ' — unassigned'}
                       </option>
                     ))}
                   </select>
+                  {driversError && (
+                    <p className="mt-1 text-xs text-red-600">{driversError}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-2">Driver Name</label>

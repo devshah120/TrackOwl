@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Search, Edit2, Trash2, X, Phone } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, X, Phone, Star } from 'lucide-react';
 import { Topbar } from '../../components/Topbar';
 import { admin } from '../../services/api';
 
@@ -7,13 +7,24 @@ const emptyForm = {
   owner: '',
   truckNumber: '',
   model: '',
-  driverName: '',
-  mobileNumber: '',
-  licenseNumber: '',
-  licenseExpiry: '',
-  monthlySalary: '',
   registrationDate: '',
   insuranceExpiry: '',
+};
+
+const emptyDriver = () => ({
+  name: '',
+  mobile: '',
+  licenseNumber: '',
+  licenseExpiry: '',
+  salary: '',
+  isPrimary: false,
+});
+
+// A truck's drivers, primary first, falling back to the legacy single `driver`
+// for records not yet migrated to the drivers collection.
+const driversOf = (truck) => {
+  if (truck?.drivers?.length) return truck.drivers;
+  return truck?.driver ? [truck.driver] : [];
 };
 
 function TruckModal({ clients, editingTruck, onClose, onSaved }) {
@@ -23,25 +34,55 @@ function TruckModal({ clients, editingTruck, onClose, onSaved }) {
       owner: editingTruck.owner?._id || editingTruck.owner || '',
       truckNumber: editingTruck.number || '',
       model: editingTruck.model || '',
-      driverName: editingTruck.driver?.name || '',
-      mobileNumber: editingTruck.driver?.mobile || '',
-      licenseNumber: editingTruck.driver?.licenseNumber || '',
-      licenseExpiry: editingTruck.driver?.licenseExpiry ? editingTruck.driver.licenseExpiry.slice(0, 10) : '',
-      monthlySalary: editingTruck.driver?.salary ?? '',
       registrationDate: editingTruck.registrationDate ? editingTruck.registrationDate.slice(0, 10) : '',
       insuranceExpiry: editingTruck.insuranceExpiry ? editingTruck.insuranceExpiry.slice(0, 10) : '',
     };
+  });
+  const [drivers, setDrivers] = useState(() => {
+    const existing = driversOf(editingTruck);
+    if (!existing.length) return [{ ...emptyDriver(), isPrimary: true }];
+    return existing.map((d, i) => ({
+      _id: d._id || d.id,
+      name: d.name || '',
+      mobile: d.mobile || '',
+      licenseNumber: d.licenseNumber || '',
+      licenseExpiry: d.licenseExpiry ? d.licenseExpiry.slice(0, 10) : '',
+      salary: d.salary ?? '',
+      isPrimary: d.isPrimary ?? i === 0,
+    }));
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   const change = (e) => setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
+  const changeDriver = (index, field, value) =>
+    setDrivers((prev) => prev.map((d, i) => (i === index ? { ...d, [field]: value } : d)));
+
+  const addDriver = () => setDrivers((prev) => [...prev, emptyDriver()]);
+
+  const removeDriver = (index) =>
+    setDrivers((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      if (!next.length) return [{ ...emptyDriver(), isPrimary: true }];
+      if (!next.some((d) => d.isPrimary)) next[0] = { ...next[0], isPrimary: true };
+      return next;
+    });
+
+  const setPrimary = (index) =>
+    setDrivers((prev) => prev.map((d, i) => ({ ...d, isPrimary: i === index })));
+
   const submit = async (e) => {
     e.preventDefault();
     setError('');
     if (!form.owner) return setError('Select a client to own this truck');
     if (!form.truckNumber || !form.model) return setError('Truck number and model are required');
+
+    // Blank rows are dropped; partially filled ones are rejected.
+    const filled = drivers.filter((d) => d.name.trim() || d.mobile.trim());
+    if (filled.some((d) => !d.name.trim() || !/^\d{10}$/.test(d.mobile.trim()))) {
+      return setError('Every driver needs a name and a valid 10-digit mobile number.');
+    }
 
     setSubmitting(true);
     try {
@@ -51,13 +92,15 @@ function TruckModal({ clients, editingTruck, onClose, onSaved }) {
         model: form.model,
         registrationDate: form.registrationDate || undefined,
         insuranceExpiry: form.insuranceExpiry || undefined,
-        driver: {
-          name: form.driverName,
-          mobile: form.mobileNumber,
-          licenseNumber: form.licenseNumber,
-          licenseExpiry: form.licenseExpiry || undefined,
-          salary: form.monthlySalary === '' ? undefined : Number(form.monthlySalary),
-        },
+        drivers: filled.map((d) => ({
+          ...(d._id ? { _id: d._id } : {}),
+          name: d.name.trim(),
+          mobile: d.mobile.trim(),
+          licenseNumber: d.licenseNumber,
+          licenseExpiry: d.licenseExpiry || undefined,
+          salary: d.salary === '' ? undefined : Number(d.salary),
+          isPrimary: Boolean(d.isPrimary),
+        })),
       };
       if (editingTruck) {
         const truckId = editingTruck._id || editingTruck.id;
@@ -121,31 +164,77 @@ function TruckModal({ clients, editingTruck, onClose, onSaved }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Driver Name</label>
-              <input name="driverName" value={form.driverName} onChange={change}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <div className="pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-sm font-semibold text-slate-900">Drivers</label>
+              <button type="button" onClick={addDriver}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors">
+                <Plus className="w-3.5 h-3.5" />
+                Add Driver
+              </button>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Mobile</label>
-              <input name="mobileNumber" value={form.mobileNumber} onChange={change}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">License Number</label>
-              <input name="licenseNumber" value={form.licenseNumber} onChange={change}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">License Expiry</label>
-              <input type="date" name="licenseExpiry" value={form.licenseExpiry} onChange={change}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Monthly Salary (₹)</label>
-              <input type="number" name="monthlySalary" value={form.monthlySalary} onChange={change}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+
+            <div className="space-y-3">
+              {drivers.map((driver, index) => (
+                <div key={driver._id || index}
+                  className={`rounded-lg border p-3 ${driver.isPrimary ? 'border-blue-200 bg-blue-50/40' : 'border-slate-200'}`}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-900">Driver {index + 1}</span>
+                      {driver.isPrimary && (
+                        <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 rounded-full">
+                          Primary
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {!driver.isPrimary && (
+                        <button type="button" onClick={() => setPrimary(index)}
+                          className="flex items-center gap-1 px-2 py-1 text-xs text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="Make this the primary driver">
+                          <Star className="w-3.5 h-3.5" />
+                          Primary
+                        </button>
+                      )}
+                      {drivers.length > 1 && (
+                        <button type="button" onClick={() => removeDriver(index)}
+                          className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Remove this driver">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Driver Name</label>
+                      <input value={driver.name} onChange={(e) => changeDriver(index, 'name', e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Mobile</label>
+                      <input value={driver.mobile} onChange={(e) => changeDriver(index, 'mobile', e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">License Number</label>
+                      <input value={driver.licenseNumber} onChange={(e) => changeDriver(index, 'licenseNumber', e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">License Expiry</label>
+                      <input type="date" value={driver.licenseExpiry} onChange={(e) => changeDriver(index, 'licenseExpiry', e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Monthly Salary (₹)</label>
+                      <input type="number" value={driver.salary} onChange={(e) => changeDriver(index, 'salary', e.target.value)}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -275,7 +364,7 @@ export function AdminFleet() {
                     <tr>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Truck</th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Client</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Driver</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Drivers</th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Mobile</th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Status</th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Actions</th>
@@ -284,8 +373,9 @@ export function AdminFleet() {
                   <tbody className="divide-y divide-slate-200">
                     {filtered.map((truck) => {
                       const id = truck._id || truck.id;
+                      const truckDrivers = driversOf(truck);
                       return (
-                        <tr key={id} className="hover:bg-slate-50 transition-colors">
+                        <tr key={id} className="hover:bg-slate-50 transition-colors align-top">
                           <td className="px-6 py-4 text-sm">
                             <p className="font-medium text-blue-600">{truck.number}</p>
                             <p className="text-xs text-slate-500">{truck.model}</p>
@@ -294,12 +384,33 @@ export function AdminFleet() {
                             <p className="text-slate-900">{truck.owner?.company || '—'}</p>
                             <p className="text-xs text-slate-500">{truck.owner?.name}</p>
                           </td>
-                          <td className="px-6 py-4 text-sm text-slate-700">{truck.driver?.name || '—'}</td>
                           <td className="px-6 py-4 text-sm text-slate-700">
-                            <div className="flex items-center gap-2">
-                              {truck.driver?.mobile && <Phone className="w-4 h-4 text-slate-400" />}
-                              {truck.driver?.mobile || '—'}
-                            </div>
+                            {truckDrivers.length === 0 ? '—' : (
+                              <div className="space-y-1">
+                                {truckDrivers.map((d, i) => (
+                                  <div key={d._id || i} className="flex items-center gap-2 whitespace-nowrap">
+                                    <span>{d.name}</span>
+                                    {d.isPrimary && truckDrivers.length > 1 && (
+                                      <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 rounded">
+                                        Primary
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-slate-700">
+                            {truckDrivers.length === 0 ? '—' : (
+                              <div className="space-y-1">
+                                {truckDrivers.map((d, i) => (
+                                  <div key={d._id || i} className="flex items-center gap-2 whitespace-nowrap">
+                                    {d.mobile && <Phone className="w-4 h-4 text-slate-400 shrink-0" />}
+                                    {d.mobile || '—'}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </td>
                           <td className="px-6 py-4 text-sm">
                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColor(truck.status)}`}>

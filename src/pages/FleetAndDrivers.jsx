@@ -77,11 +77,20 @@ export function FleetAndDrivers() {
     return () => { cancelled = true; };
   }, []);
 
+  // A truck's drivers, primary first. Falls back to the legacy single `driver`
+  // for records not yet migrated to the drivers collection.
+  const driversOf = (truck) => {
+    if (truck.drivers?.length) return truck.drivers;
+    return truck.driver ? [truck.driver] : [];
+  };
+
   const filteredTrucks = trucks.filter((truck) => {
+    const q = searchQuery.toLowerCase();
     const matchesSearch =
-      truck.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (truck.driver?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      truck.model.toLowerCase().includes(searchQuery.toLowerCase());
+      truck.number.toLowerCase().includes(q) ||
+      truck.model.toLowerCase().includes(q) ||
+      // Search hits on any driver assigned to the truck, not just the primary.
+      driversOf(truck).some((d) => (d.name || '').toLowerCase().includes(q));
 
     if (filterStatus === 'all') return matchesSearch;
     return matchesSearch && truck.status.toLowerCase() === filterStatus;
@@ -240,7 +249,7 @@ export function FleetAndDrivers() {
                     <tr>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Truck</th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Model</th>
-                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Driver</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Drivers</th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Mobile</th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Salary</th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Status</th>
@@ -252,18 +261,52 @@ export function FleetAndDrivers() {
                   <tbody className="divide-y divide-slate-200">
                     {filteredTrucks.map((truck) => {
                       const truckId = truck._id || truck.id;
+                      const truckDrivers = driversOf(truck);
+                      const totalSalary = truckDrivers.reduce((sum, d) => sum + Number(d.salary || 0), 0);
                       return (
-                      <tr key={truckId} className="hover:bg-slate-50 transition-colors">
+                      <tr key={truckId} className="hover:bg-slate-50 transition-colors align-top">
                         <td className="px-6 py-4 text-sm font-medium text-blue-600">{truck.number}</td>
                         <td className="px-6 py-4 text-sm text-slate-700">{truck.model}</td>
-                        <td className="px-6 py-4 text-sm text-slate-700">{truck.driver?.name}</td>
                         <td className="px-6 py-4 text-sm text-slate-700">
-                          <div className="flex items-center gap-2">
-                            <Phone className="w-4 h-4 text-slate-400" />
-                            {truck.driver?.mobile}
-                          </div>
+                          {truckDrivers.length === 0 ? (
+                            <span className="text-slate-400">—</span>
+                          ) : (
+                            <div className="space-y-1">
+                              {truckDrivers.map((d, i) => (
+                                <div key={d._id || i} className="flex items-center gap-2 whitespace-nowrap">
+                                  <span>{d.name}</span>
+                                  {d.isPrimary && truckDrivers.length > 1 && (
+                                    <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 rounded">
+                                      Primary
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </td>
-                        <td className="px-6 py-4 text-sm font-semibold text-slate-900">₹{Number(truck.driver?.salary || 0).toLocaleString()}</td>
+                        <td className="px-6 py-4 text-sm text-slate-700">
+                          {truckDrivers.length === 0 ? (
+                            <span className="text-slate-400">—</span>
+                          ) : (
+                            <div className="space-y-1">
+                              {truckDrivers.map((d, i) => (
+                                <div key={d._id || i} className="flex items-center gap-2 whitespace-nowrap">
+                                  <Phone className="w-4 h-4 text-slate-400 shrink-0" />
+                                  {d.mobile}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-sm font-semibold text-slate-900 whitespace-nowrap">
+                          ₹{totalSalary.toLocaleString()}
+                          {truckDrivers.length > 1 && (
+                            <span className="block text-xs font-normal text-slate-500">
+                              {truckDrivers.length} drivers
+                            </span>
+                          )}
+                        </td>
                         <td className="px-6 py-4 text-sm">
                           <div className="flex items-center gap-2">
                             <div className={`w-2 h-2 rounded-full ${getStatusDot(truck.status)}`}></div>
