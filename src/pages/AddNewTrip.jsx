@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { Topbar } from '../components/Topbar';
 import { PlaceSearchInput } from '../components/PlaceSearchInput';
 import { GoogleFleetMap } from '../components/GoogleFleetMap';
-import { billing, drivers as driversApi, trips as tripsApi, tracking, geo } from '../services/api';
+import { billing, drivers as driversApi, trips as tripsApi, tracking, geo, fleet } from '../services/api';
 
 // Dates come back from the API as ISO strings but the <input type="date">
 // fields want plain YYYY-MM-DD.
@@ -36,7 +36,7 @@ const formatDurationMin = (mins) => {
 const STEPS = [
   { id: 'route', label: 'Route', icon: RouteIcon },
   { id: 'vehicle', label: 'Vehicle & Driver', icon: Truck },
-  { id: 'parties', label: 'Parties', icon: Users },
+  { id: 'parties', label: 'Trip Details & Parties', icon: Users },
   { id: 'goods', label: 'Goods & Freight', icon: Package },
   { id: 'payment', label: 'Documents & Payment', icon: FileText },
 ];
@@ -71,6 +71,11 @@ export function AddNewTrip() {
   // GPS devices, so the trip can be tracked once it is running.
   const [devices, setDevices] = useState([]);
   const [deviceId, setDeviceId] = useState('');
+
+  // The truck roster. A truck now carries its own `device` ref, so choosing a
+  // truck is what selects the tracker — the two are no longer matched by name.
+  const [trucks, setTrucks] = useState([]);
+  const [truckId, setTruckId] = useState('');
 
   // The real driver roster. A truck can carry several drivers, so this lists
   // every driver the client has and shows which truck each is assigned to —
@@ -114,6 +119,34 @@ export function AddNewTrip() {
         if (!cancelled) setDevices(res.devices || []);
       } catch {
         if (!cancelled) setDevices([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // The truck roster, each with the GPS unit fitted to it.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fleet.list();
+        if (cancelled) return;
+        setTrucks(
+          (res.trucks || []).map((t) => {
+            // `device` is populated on some responses and a bare id on others.
+            const dev = t.device;
+            const devId = dev && typeof dev === 'object' ? (dev._id || dev.id) : dev;
+            return {
+              id: t._id || t.id,
+              number: t.number,
+              model: t.model || '',
+              deviceId: devId ? String(devId) : '',
+              deviceName: dev && typeof dev === 'object' ? dev.name : '',
+            };
+          })
+        );
+      } catch {
+        if (!cancelled) setTrucks([]);
       }
     })();
     return () => { cancelled = true; };
@@ -227,6 +260,24 @@ export function AddNewTrip() {
     return () => { cancelled = true; };
   }, [id, isEditing]);
 
+  // The saved trip stores the truck number as plain text, not which roster
+  // entry it came from. Match it back up once both have loaded so the dropdown
+  // shows the right truck rather than sitting blank.
+  useEffect(() => {
+    if (!isEditing || !trucks.length || truckId) return;
+    const wanted = String(formData.truckNumber || '').replace(/[\s-]/g, '').toUpperCase();
+    if (!wanted) return;
+    const match = trucks.find(
+      (t) => String(t.number).replace(/[\s-]/g, '').toUpperCase() === wanted
+    );
+    if (match) {
+      setTruckId(match.id);
+      // Only adopt the truck's tracker if the saved trip had none of its own —
+      // the record's own device is the authority for a trip already created.
+      setDeviceId((prev) => prev || match.deviceId || '');
+    }
+  }, [isEditing, trucks, truckId, formData.truckNumber]);
+
   // The saved trip stores the driver's details, not which roster entry they
   // came from. Once both have loaded, match them back up so the dropdown shows
   // the right driver instead of sitting blank on an otherwise filled form.
@@ -307,6 +358,29 @@ export function AddNewTrip() {
     paymentNotes: '',
   });
 
+  const selectedTruck = useMemo(
+    () => trucks.find((t) => t.id === truckId) || null,
+    [trucks, truckId]
+  );
+
+  // The tracker fitted to the chosen truck, if it has reported a position.
+  // Drives both the "Use my location" button and the marker on the map.
+  const selectedDevice = useMemo(
+    () => devices.find((d) => (d._id || d.id) === deviceId) || null,
+    [devices, deviceId]
+  );
+  const deviceHasFix = Boolean(selectedDevice?.lastPosition?.latitude);
+
+  // Choosing a truck selects its tracker, fills the truck number for the
+  // paperwork, and — the point of having it on this step — lets the map show
+  // where that vehicle actually is.
+  const handleTruckChange = (nextId) => {
+    setTruckId(nextId);
+    const truck = trucks.find((t) => t.id === nextId);
+    setDeviceId(truck?.deviceId || '');
+    setFormData((prev) => ({ ...prev, truckNumber: truck?.number || '' }));
+  };
+
   // Both endpoints have real coordinates — the condition for drawing a road
   // route and for creating the linked trip record.
   const hasCoords = Boolean(
@@ -365,25 +439,33 @@ export function AddNewTrip() {
   // browser's geolocation (PlaceSearchInput's default) when no device is
   // selected or it has never reported.
   const handleUseVehicleLocation = async () => {
-    const dev = devices.find((d) => (d._id || d.id) === deviceId);
-    const pos = dev?.lastPosition;
+    const pos = selectedDevice?.lastPosition;
     if (!pos?.latitude || !pos?.longitude) {
       throw new Error(
-        dev
-          ? `No GPS location recorded for ${dev.name || 'this vehicle'} yet.`
-          : 'Select a vehicle with a tracker first, or search for the location.'
+        selectedDevice
+          ? `No GPS location recorded for ${selectedDevice.name || 'this vehicle'} yet.`
+          : 'Choose a truck with a tracker first, or search for the location.'
       );
     }
     return geo.reverseGeocode({ lat: pos.latitude, lng: pos.longitude });
   };
 
-  // Frame the map on whichever endpoints are set.
+  // Frame the map on whichever endpoints are set. With neither set yet, fall
+  // back to the chosen vehicle so selecting a truck moves the map to where it
+  // is — which is usually where the trip starts.
   const framePoints = useMemo(() => {
     const pts = [];
     if (origin?.lat != null) pts.push({ lat: origin.lat, lng: origin.lng });
     if (destination?.lat != null) pts.push({ lat: destination.lat, lng: destination.lng });
-    return pts.length ? pts : null;
-  }, [origin, destination]);
+    if (pts.length) return pts;
+    if (deviceHasFix) {
+      return [{
+        lat: selectedDevice.lastPosition.latitude,
+        lng: selectedDevice.lastPosition.longitude,
+      }];
+    }
+    return null;
+  }, [origin, destination, deviceHasFix, selectedDevice]);
 
   const mapRoute = useMemo(() => ({
     polyline: routeInfo?.polyline || null,
@@ -402,6 +484,9 @@ export function AddNewTrip() {
     const driverId = e.target.value;
     const selectedDriver = drivers.find((d) => d.id === driverId);
 
+    // The truck is chosen explicitly on the Route step (it drives the map), so
+    // it is deliberately not overwritten here — a driver's usual truck is not
+    // necessarily the one running this trip.
     if (selectedDriver) {
       setFormData((prev) => ({
         ...prev,
@@ -409,22 +494,7 @@ export function AddNewTrip() {
         driverName: selectedDriver.name,
         driverMobile: selectedDriver.mobile,
         driverLicenseNumber: selectedDriver.licenseNumber,
-        truckNumber: selectedDriver.truckNumber,
       }));
-
-      // The driver's truck and the GPS tracker are separate records that
-      // usually share a name/number. Match them so tracking is pre-selected
-      // rather than left to be found manually; an unmatched truck simply
-      // leaves the choice open.
-      if (selectedDriver.truckNumber) {
-        const wanted = selectedDriver.truckNumber.replace(/[\s-]/g, '').toLowerCase();
-        const match = devices.find((d) => {
-          const name = String(d.name || '').replace(/[\s-]/g, '').toLowerCase();
-          const uid = String(d.uniqueId || '').replace(/[\s-]/g, '').toLowerCase();
-          return name === wanted || uid === wanted || name.includes(wanted);
-        });
-        if (match) setDeviceId(match._id || match.id);
-      }
     } else {
       setFormData((prev) => ({
         ...prev,
@@ -432,7 +502,6 @@ export function AddNewTrip() {
         driverName: '',
         driverMobile: '',
         driverLicenseNumber: '',
-        truckNumber: '',
       }));
     }
   };
@@ -461,21 +530,19 @@ export function AddNewTrip() {
   // and the text explaining why the button did nothing.
   const validateStep = (index) => {
     if (index === 0) {
+      if (!truckId) return 'Choose the truck making this trip.';
       if (!origin) return 'Choose where the trip starts from.';
       if (!destination) return 'Choose where the trip is going to.';
-      if (!formData.tripDate) return 'Enter the trip date.';
-      if (!formData.loadingDate) return 'Enter the loading date.';
-      if (!formData.deliveryDate) return 'Enter the delivery date.';
       return '';
     }
     if (index === 1) {
       if (!formData.driverId) return 'Select the driver for this trip.';
-      if (!formData.truckNumber) {
-        return 'This driver has no truck assigned. Assign one under Fleet & Drivers first.';
-      }
       return '';
     }
     if (index === 2) {
+      if (!formData.tripDate) return 'Enter the trip date.';
+      if (!formData.loadingDate) return 'Enter the loading date.';
+      if (!formData.deliveryDate) return 'Enter the delivery date.';
       if (!formData.supplierName.trim()) return 'Enter the supplier (consignor) name.';
       if (!formData.buyerName.trim()) return 'Enter the buyer (consignee) name.';
       return '';
@@ -755,9 +822,45 @@ export function AddNewTrip() {
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2">
-                      {/* Left: the two location fields */}
-                      <div className="space-y-4 px-6 pb-6">
+                    {/* The route step is the whole page: the fields sit in a
+                        narrow column and the map takes all the width left, so
+                        picking a point is done on a map big enough to see. */}
+                    <div className="flex flex-col lg:flex-row lg:items-stretch">
+                      {/* Left: vehicle, then the two location fields */}
+                      <div className="space-y-4 px-6 pb-6 lg:w-[22rem] lg:shrink-0">
+                        {/* Choosing the truck here (rather than two steps later)
+                            is what makes "Use my location" meaningful — it
+                            resolves to this vehicle's own last GPS fix. */}
+                        <div>
+                          <label className={LABEL}>Truck</label>
+                          <select
+                            value={truckId}
+                            onChange={(e) => handleTruckChange(e.target.value)}
+                            className={INPUT}
+                            disabled={isEditing}
+                          >
+                            <option value="">
+                              {trucks.length ? 'Choose a truck…' : 'No trucks yet'}
+                            </option>
+                            {trucks.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.number}
+                                {t.deviceName ? ` — ${t.deviceName}` : ' — no tracker'}
+                              </option>
+                            ))}
+                          </select>
+                          {selectedTruck && !selectedTruck.deviceId && (
+                            <p className="mt-1 text-xs text-amber-700">
+                              This truck has no GPS tracker, so the trip won't be live-trackable.
+                            </p>
+                          )}
+                          {selectedTruck?.deviceId && !deviceHasFix && (
+                            <p className="mt-1 text-xs text-amber-700">
+                              {selectedTruck.deviceName} hasn't reported a position yet.
+                            </p>
+                          )}
+                        </div>
+
                         <PlaceSearchInput
                           label="From"
                           placeholder="Start location, e.g. Mumbai"
@@ -825,11 +928,12 @@ export function AddNewTrip() {
                           it. A percentage height would have nothing to resolve
                           against in this grid row and collapse to zero. */}
                       <div
-                        className="relative border-t border-slate-200 lg:border-l lg:border-t-0"
-                        style={{ height: 460 }}
+                        className="relative w-full min-w-0 flex-1 border-t border-slate-200 lg:border-l lg:border-t-0"
+                        style={{ height: 560 }}
                       >
                         <GoogleFleetMap
-                          devices={devices}
+                          devices={selectedDevice ? [selectedDevice] : []}
+                          selectedId={deviceId || null}
                           route={mapRoute}
                           fitTo={framePoints}
                           onClick={handleMapClick}
@@ -897,42 +1001,6 @@ export function AddNewTrip() {
                     </div>
                   </div>
 
-                  {/* Dates belong with the route — they say when this journey runs. */}
-                  <div className="bg-white rounded-lg border border-slate-200 p-6">
-                    <h2 className="text-lg font-semibold text-slate-900 mb-4">Trip Dates</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div>
-                        <label className={LABEL}>Trip Date</label>
-                        <input
-                          type="date"
-                          name="tripDate"
-                          value={formData.tripDate}
-                          onChange={handleInputChange}
-                          className={INPUT}
-                        />
-                      </div>
-                      <div>
-                        <label className={LABEL}>Loading Date</label>
-                        <input
-                          type="date"
-                          name="loadingDate"
-                          value={formData.loadingDate}
-                          onChange={handleInputChange}
-                          className={INPUT}
-                        />
-                      </div>
-                      <div>
-                        <label className={LABEL}>Delivery Date</label>
-                        <input
-                          type="date"
-                          name="deliveryDate"
-                          value={formData.deliveryDate}
-                          onChange={handleInputChange}
-                          className={INPUT}
-                        />
-                      </div>
-                    </div>
-                  </div>
                 </div>
               )}
 
@@ -941,7 +1009,7 @@ export function AddNewTrip() {
                 <div className="bg-white rounded-lg border border-slate-200 p-6">
                   <h2 className="text-lg font-semibold text-slate-900 mb-1">Vehicle &amp; Driver Details</h2>
                   <p className="text-sm text-slate-500 mb-4">
-                    Picking a driver fills in their truck, mobile and licence for the Lorry Receipt.
+                    Picking a driver fills in their mobile and licence for the Lorry Receipt.
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
@@ -984,37 +1052,22 @@ export function AddNewTrip() {
                         className={READONLY}
                       />
                     </div>
+                    {/* Chosen on the Route step, where it drives the map. Shown
+                        here read-only so this step still reads as the full
+                        vehicle-and-driver picture. */}
                     <div>
-                      <label className={LABEL}>Truck Number</label>
-                      <input type="text" name="truckNumber" value={formData.truckNumber} readOnly className={READONLY} />
-                    </div>
-
-                    {/* The GPS tracker is what puts this trip on the live map.
-                        Separate from the truck because not every truck has one. */}
-                    <div>
-                      <label className={LABEL}>
-                        GPS Tracker <span className="font-normal text-slate-400">(optional)</span>
-                      </label>
-                      <select
-                        value={deviceId}
-                        onChange={(e) => setDeviceId(e.target.value)}
-                        className={INPUT}
-                        disabled={isEditing}
-                      >
-                        <option value="">
-                          {devices.length ? 'No live tracking' : 'No trackers registered'}
-                        </option>
-                        {devices.map((d) => (
-                          <option key={d._id || d.id} value={d._id || d.id}>
-                            {d.name}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-xs text-slate-500 mt-1">
-                        {isEditing
-                          ? 'Tracking is fixed once a trip is created.'
-                          : 'Attach a tracker to follow this trip live on Trip Routes.'}
-                      </p>
+                      <label className={LABEL}>Truck</label>
+                      <input
+                        type="text"
+                        value={
+                          formData.truckNumber
+                            ? `${formData.truckNumber}${selectedTruck?.deviceName ? ` — ${selectedTruck.deviceName}` : ''}`
+                            : ''
+                        }
+                        readOnly
+                        className={READONLY}
+                      />
+                      <p className="text-xs text-slate-500 mt-1">Set on the Route step.</p>
                     </div>
                   </div>
 
@@ -1026,7 +1079,7 @@ export function AddNewTrip() {
                       <span>
                         {!hasCoords
                           ? 'From and To were not pinned on the map, so this trip will not appear on Trip Routes. Go back to the Route step and pick them from the map or search.'
-                          : 'No tracker selected — the paperwork will be created, but this trip will not appear on Trip Routes for live tracking.'}
+                          : `${formData.truckNumber || 'This truck'} has no GPS tracker fitted, so the paperwork will be created but the trip will not appear on Trip Routes. Link a tracker to it under Fleet Management.`}
                       </span>
                     </p>
                   )}
@@ -1036,6 +1089,80 @@ export function AddNewTrip() {
               {/* ---------- Step 3: Parties ---------- */}
               {step === 2 && (
                 <div className="space-y-6">
+                  {/* Trip details sit with the parties rather than the map —
+                      the route step is about picking points, and these are the
+                      terms of the job those points belong to. */}
+                  <div className="bg-white rounded-lg border border-slate-200 p-6">
+                    <h2 className="text-lg font-semibold text-slate-900 mb-1">Trip Details</h2>
+                    <p className="text-sm text-slate-500 mb-4">
+                      When this journey runs, and its status on the trips list.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div>
+                        <label className={LABEL}>Trip Date</label>
+                        <input
+                          type="date"
+                          name="tripDate"
+                          value={formData.tripDate}
+                          onChange={handleInputChange}
+                          className={INPUT}
+                        />
+                      </div>
+                      <div>
+                        <label className={LABEL}>Loading Date</label>
+                        <input
+                          type="date"
+                          name="loadingDate"
+                          value={formData.loadingDate}
+                          onChange={handleInputChange}
+                          className={INPUT}
+                        />
+                      </div>
+                      <div>
+                        <label className={LABEL}>Delivery Date</label>
+                        <input
+                          type="date"
+                          name="deliveryDate"
+                          value={formData.deliveryDate}
+                          onChange={handleInputChange}
+                          className={INPUT}
+                        />
+                      </div>
+                      <div>
+                        <label className={LABEL}>Status</label>
+                        <select
+                          name="status"
+                          value={formData.status}
+                          onChange={handleInputChange}
+                          className={INPUT}
+                        >
+                          <option>In Transit</option>
+                          <option>Delivered</option>
+                          <option>Completed</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* The route is set two steps back; showing it here means
+                        the dates are read against the journey they describe. */}
+                    {(origin || destination) && (
+                      <p className="mt-4 flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                        <MapPin className="h-3.5 w-3.5 shrink-0 text-green-600" />
+                        <span className="font-medium text-slate-800">
+                          {origin ? shortPlace(origin.name) : '—'}
+                        </span>
+                        <Navigation className="h-3.5 w-3.5 shrink-0 text-sky-500" />
+                        <Flag className="h-3.5 w-3.5 shrink-0 text-red-600" />
+                        <span className="font-medium text-slate-800">
+                          {destination ? shortPlace(destination.name) : '—'}
+                        </span>
+                        {routeInfo?.distanceKm ? (
+                          <span className="text-slate-500">· {routeInfo.distanceKm} km</span>
+                        ) : null}
+                      </p>
+                    )}
+                  </div>
+
                   <div className="bg-white rounded-lg border border-slate-200 p-6">
                     <h2 className="text-lg font-semibold text-slate-900 mb-4">Supplier (Consignor)</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
