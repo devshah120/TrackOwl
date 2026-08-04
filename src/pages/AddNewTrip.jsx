@@ -77,6 +77,11 @@ export function AddNewTrip() {
   const [trucks, setTrucks] = useState([]);
   const [truckId, setTruckId] = useState('');
 
+  // An edited trip's saved truck number, held until the roster loads so the
+  // dropdown can be matched back to it. A ref rather than a read of `formData`,
+  // which is declared below the effect that needs this.
+  const savedTruckNumberRef = useRef('');
+
   // The real driver roster. A truck can carry several drivers, so this lists
   // every driver the client has and shows which truck each is assigned to —
   // picking one fills in the truck as well.
@@ -180,6 +185,9 @@ export function AddNewTrip() {
 
         setLinkedTripRoute(trip.tripRoute || null);
         if (trip.device) setDeviceId(String(trip.device));
+        // Matched against the truck roster once it loads, to preselect the
+        // Route step's truck dropdown.
+        savedTruckNumberRef.current = String(trip.truck || '');
 
         // Prefer the saved coordinates; fall back to the plain strings so a
         // trip created before map picking existed still shows its From/To
@@ -260,23 +268,19 @@ export function AddNewTrip() {
     return () => { cancelled = true; };
   }, [id, isEditing]);
 
-  // The saved trip stores the truck number as plain text, not which roster
-  // entry it came from. Match it back up once both have loaded so the dropdown
-  // shows the right truck rather than sitting blank.
   useEffect(() => {
     if (!isEditing || !trucks.length || truckId) return;
-    const wanted = String(formData.truckNumber || '').replace(/[\s-]/g, '').toUpperCase();
+    const wanted = savedTruckNumberRef.current.replace(/[\s-]/g, '').toUpperCase();
     if (!wanted) return;
     const match = trucks.find(
       (t) => String(t.number).replace(/[\s-]/g, '').toUpperCase() === wanted
     );
-    if (match) {
-      setTruckId(match.id);
-      // Only adopt the truck's tracker if the saved trip had none of its own —
-      // the record's own device is the authority for a trip already created.
-      setDeviceId((prev) => prev || match.deviceId || '');
-    }
-  }, [isEditing, trucks, truckId, formData.truckNumber]);
+    if (!match) return;
+    setTruckId(match.id);
+    // Only adopt the truck's tracker if the saved trip had none of its own —
+    // the record's own device is the authority for a trip already created.
+    setDeviceId((prev) => prev || match.deviceId || '');
+  }, [isEditing, trucks, truckId, loadingTrip]);
 
   // The saved trip stores the driver's details, not which roster entry they
   // came from. Once both have loaded, match them back up so the dropdown shows
