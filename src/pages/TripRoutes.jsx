@@ -451,7 +451,8 @@ export function TripRoutes() {
     if (!selected.origin?.lat || !selected.destination?.lat) return;
 
     let cancelled = false;
-    geo.getRoute(selected.origin, selected.destination)
+    const waypoints = (selected.stops || []).filter((s) => s?.lat != null && s?.lng != null);
+    geo.getRoute(selected.origin, selected.destination, { waypoints })
       .then((r) => {
         if (!cancelled && r?.polyline?.length) {
           setRouteCache((prev) => ({ ...prev, [selectedId]: r.polyline }));
@@ -528,6 +529,7 @@ export function TripRoutes() {
       originName: selected.origin.name,
       destination: { lat: selected.destination.lat, lng: selected.destination.lng },
       destinationName: selected.destination.name,
+      waypoints: selected.stops || [],
     };
   }, [selected, routePoints, visibleTrail, visibleStops, untrackedGaps]);
 
@@ -697,6 +699,11 @@ export function TripRoutes() {
                           <p className="flex items-center gap-1.5 truncate text-sm font-medium text-slate-900">
                             <span className="truncate">{shortPlace(t.origin.name)}</span>
                             <Navigation className="h-3.5 w-3.5 shrink-0 text-sky-500" />
+                            {t.stops?.length > 0 && (
+                              <span className="shrink-0 rounded-full bg-violet-100 px-1.5 py-0.5 text-[11px] font-semibold text-violet-700">
+                                +{t.stops.length}
+                              </span>
+                            )}
                             <span className="truncate">{shortPlace(t.destination.name)}</span>
                           </p>
                           <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 truncate text-xs text-slate-500">

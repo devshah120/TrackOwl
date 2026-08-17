@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ArrowLeft, ArrowRight, MapPin, Flag, Navigation, Loader2, Check,
   Route as RouteIcon, Truck, Users, Package, FileText, AlertCircle, X, Clock,
+  Plus, GripVertical, Trash2, ArrowUp, ArrowDown,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -72,9 +73,13 @@ export function AddNewTrip() {
   // string, so the trip can be drawn on the map and matched to live GPS.
   const [origin, setOrigin] = useState(null);
   const [destination, setDestination] = useState(null);
+  // Intermediate stops between origin and destination, in travel order. Each
+  // is a { name, lat, lng } place, same shape as origin/destination.
+  const [stops, setStops] = useState([]);
   const [routeInfo, setRouteInfo] = useState(null);
   const [routing, setRouting] = useState(false);
-  const [pickingTarget, setPickingTarget] = useState(null); // 'origin' | 'destination' | null
+  // 'origin' | 'destination' | { stopIndex } | null
+  const [pickingTarget, setPickingTarget] = useState(null);
   const [geocodingPick, setGeocodingPick] = useState(false);
 
   // GPS devices, so the trip can be tracked once it is running.
@@ -217,6 +222,9 @@ export function AddNewTrip() {
           setDestination(trip.destinationPlace);
         } else if (trip.toLocation) {
           setDestination({ name: trip.toLocation, lat: null, lng: null });
+        }
+        if (Array.isArray(trip.stops)) {
+          setStops(trip.stops.filter((s) => s?.lat != null && s?.lng != null));
         }
 
         setFormData((prev) => ({
@@ -431,7 +439,16 @@ export function AddNewTrip() {
     destination?.lat != null && destination?.lng != null
   );
 
-  // Recompute the road route whenever both endpoints are set.
+  // Stops with real coordinates, in travel order — the waypoints the road
+  // route is drawn through. A stop dropped on the map before it resolves an
+  // address has no coordinate yet and is excluded until it does.
+  const validStops = useMemo(
+    () => stops.filter((s) => s?.lat != null && s?.lng != null),
+    [stops]
+  );
+
+  // Recompute the road route whenever both endpoints, or the stops between
+  // them, change.
   useEffect(() => {
     if (!hasCoords) {
       setRouteInfo(null);
@@ -440,17 +457,19 @@ export function AddNewTrip() {
     let cancelled = false;
     const controller = new AbortController();
     setRouting(true);
-    geo.getRoute(origin, destination, { signal: controller.signal })
+    geo.getRoute(origin, destination, { signal: controller.signal, waypoints: validStops })
       .then((r) => { if (!cancelled) setRouteInfo(r); })
       .catch((err) => {
         if (err.name !== 'AbortError' && !cancelled) setRouteInfo(null);
       })
       .finally(() => { if (!cancelled) setRouting(false); });
     return () => { cancelled = true; controller.abort(); };
-  }, [hasCoords, origin, destination]);
+  }, [hasCoords, origin, destination, validStops]);
 
   // Clicking the map fills whichever endpoint is being picked, then advances to
-  // the other one so From and To can be set in two clicks.
+  // the other one so From and To can be set in two clicks. A stop is picked by
+  // passing { stopIndex } as the target, and picking stays put afterwards —
+  // stops are filled one at a time via "Add stop", not chained like From/To.
   const handleMapClick = async ({ lat, lng }) => {
     let target = pickingTarget;
     if (!target) {
@@ -466,8 +485,11 @@ export function AddNewTrip() {
       if (target === 'origin') {
         setOrigin(place);
         setPickingTarget(destination ? null : 'destination');
-      } else {
+      } else if (target === 'destination') {
         setDestination(place);
+        setPickingTarget(null);
+      } else if (typeof target === 'object' && target.stopIndex != null) {
+        setStops((prev) => prev.map((s, i) => (i === target.stopIndex ? place : s)));
         setPickingTarget(null);
       }
     } catch (err) {
@@ -475,6 +497,30 @@ export function AddNewTrip() {
     } finally {
       setGeocodingPick(false);
     }
+  };
+
+  // Stop list editing: add an empty slot (filled by search or map pick),
+  // replace one by index, remove one, or move it up/down in travel order.
+  const addStop = () => {
+    setStops((prev) => [...prev, null]);
+  };
+  const setStopAt = (index, place) => {
+    setStops((prev) => prev.map((s, i) => (i === index ? place : s)));
+  };
+  const removeStopAt = (index) => {
+    setStops((prev) => prev.filter((_, i) => i !== index));
+    setPickingTarget((prev) =>
+      typeof prev === 'object' && prev?.stopIndex === index ? null : prev
+    );
+  };
+  const moveStop = (index, delta) => {
+    setStops((prev) => {
+      const next = index + delta;
+      if (next < 0 || next >= prev.length) return prev;
+      const copy = [...prev];
+      [copy[index], copy[next]] = [copy[next], copy[index]];
+      return copy;
+    });
   };
 
   // "Use my location" on the From field: prefer the selected vehicle's own last
@@ -503,6 +549,7 @@ export function AddNewTrip() {
   const framePoints = useMemo(() => {
     const pts = [];
     if (origin?.lat != null) pts.push({ lat: origin.lat, lng: origin.lng });
+    validStops.forEach((s) => pts.push({ lat: s.lat, lng: s.lng }));
     if (destination?.lat != null) pts.push({ lat: destination.lat, lng: destination.lng });
     if (pts.length) return pts;
     if (deviceHasFix) {
@@ -512,7 +559,7 @@ export function AddNewTrip() {
       }];
     }
     return [INDIA_VIEW.sw, INDIA_VIEW.ne];
-  }, [origin, destination, deviceHasFix, selectedDevice]);
+  }, [origin, destination, validStops, deviceHasFix, selectedDevice]);
 
   // Names what the map is currently framing. The component's default key is the
   // number of points, and the opening country view is two points just as a
@@ -521,10 +568,11 @@ export function AddNewTrip() {
   const frameKey = useMemo(() => {
     const o = origin?.lat != null ? `${origin.lat},${origin.lng}` : '';
     const d = destination?.lat != null ? `${destination.lat},${destination.lng}` : '';
-    if (o || d) return `route_${o}_${d}`;
+    const s = validStops.map((p) => `${p.lat},${p.lng}`).join(';');
+    if (o || d) return `route_${o}_${d}_${s}`;
     if (deviceHasFix) return `vehicle_${deviceId}`;
     return 'default';
-  }, [origin, destination, deviceHasFix, deviceId]);
+  }, [origin, destination, validStops, deviceHasFix, deviceId]);
 
   const mapRoute = useMemo(() => ({
     polyline: routeInfo?.polyline || null,
@@ -532,7 +580,8 @@ export function AddNewTrip() {
     originName: origin?.name || 'From',
     destination: destination?.lat != null ? { lat: destination.lat, lng: destination.lng } : null,
     destinationName: destination?.name || 'To',
-  }), [routeInfo, origin, destination]);
+    waypoints: validStops,
+  }), [routeInfo, origin, destination, validStops]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -592,6 +641,7 @@ export function AddNewTrip() {
       if (!truckId) return 'Choose the truck making this trip.';
       if (!origin) return 'Choose where the trip starts from.';
       if (!destination) return 'Choose where the trip is going to.';
+      if (stops.some((s) => !s)) return 'Choose a location for every stop, or remove the empty one.';
       return '';
     }
     if (index === 1) {
@@ -692,6 +742,7 @@ export function AddNewTrip() {
             deviceId,
             origin,
             destination,
+            stops: validStops,
             routePolyline: routeInfo?.polyline,
             distanceKm: routeInfo?.distanceKm,
             durationMin: routeInfo?.durationMin,
@@ -720,6 +771,7 @@ export function AddNewTrip() {
         // re-drawn on the map when it is edited later.
         originPlace: origin?.lat != null ? origin : null,
         destinationPlace: destination?.lat != null ? destination : null,
+        stops: validStops,
         tripRoute: tripRouteId,
         device: deviceId || null,
         gstPayableBy: formData.gstPayableBy,
@@ -935,6 +987,78 @@ export function AddNewTrip() {
                           isPickingOnMap={pickingTarget === 'origin'}
                         />
 
+                        {/* Intermediate stops, in travel order between From and
+                            To. Each is its own search field so a stop can be
+                            found by name as easily as it can be dropped on the
+                            map. */}
+                        {stops.length > 0 && (
+                          <div className="space-y-3">
+                            {stops.map((stop, i) => {
+                              const isPicking =
+                                typeof pickingTarget === 'object' && pickingTarget?.stopIndex === i;
+                              return (
+                                <div key={i} className="flex items-start gap-1.5">
+                                  <div className="flex shrink-0 flex-col items-center gap-0.5 pt-7">
+                                    <button
+                                      type="button"
+                                      onClick={() => moveStop(i, -1)}
+                                      disabled={i === 0}
+                                      title="Move earlier"
+                                      className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                                    >
+                                      <ArrowUp className="h-3.5 w-3.5" />
+                                    </button>
+                                    <GripVertical className="h-3.5 w-3.5 text-slate-300" />
+                                    <button
+                                      type="button"
+                                      onClick={() => moveStop(i, 1)}
+                                      disabled={i === stops.length - 1}
+                                      title="Move later"
+                                      className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30 disabled:hover:bg-transparent"
+                                    >
+                                      <ArrowDown className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <PlaceSearchInput
+                                      label={`Stop ${i + 1}`}
+                                      placeholder="Search a stop, e.g. Lonavala"
+                                      value={stop}
+                                      onSelect={(place) => {
+                                        setStopAt(i, place);
+                                        setPickingTarget(null);
+                                      }}
+                                      icon={MapPin}
+                                      allowMapPick
+                                      onPickOnMap={() =>
+                                        setPickingTarget(isPicking ? null : { stopIndex: i })
+                                      }
+                                      isPickingOnMap={isPicking}
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeStopAt(i)}
+                                    title="Remove this stop"
+                                    className="mt-7 shrink-0 rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={addStop}
+                          className="flex items-center gap-1.5 text-xs font-medium text-sky-600 transition hover:text-sky-700"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Add a stop
+                        </button>
+
                         <PlaceSearchInput
                           label="To"
                           placeholder="Destination, e.g. Pune"
@@ -951,8 +1075,8 @@ export function AddNewTrip() {
                         <p className="flex items-start gap-1.5 rounded-lg border border-sky-100 bg-sky-50 p-2.5 text-xs text-slate-600">
                           <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-sky-600" />
                           <span>
-                            Tip: Click <strong>Pick on map</strong> or click anywhere directly on the
-                            map to choose From and To locations.
+                            Tip: Click <strong>Pick on map</strong>, or click anywhere directly on the
+                            map, to choose From, To, and any stops in between.
                           </span>
                         </p>
 
@@ -1030,6 +1154,20 @@ export function AddNewTrip() {
                                 <X className="h-3.5 w-3.5" />
                               </button>
                             </div>
+                          ) : typeof pickingTarget === 'object' && pickingTarget?.stopIndex != null ? (
+                            <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-violet-600 px-4 py-2 text-sm text-white shadow-lg">
+                              <MapPin className="h-4 w-4" />
+                              <span className="font-medium">
+                                Click on map to select "Stop {pickingTarget.stopIndex + 1}"
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setPickingTarget(null)}
+                                className="ml-1 rounded-full p-0.5 hover:bg-violet-700"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           ) : origin || destination ? (
                             <div className="flex items-center gap-2 rounded-full bg-white/95 px-4 py-2 text-sm shadow-md">
                               {origin ? (
@@ -1043,6 +1181,11 @@ export function AddNewTrip() {
                                 <span className="text-slate-400">Set From</span>
                               )}
                               <Navigation className="h-4 w-4 text-sky-500" />
+                              {stops.length > 0 && (
+                                <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[11px] font-semibold text-violet-700">
+                                  +{stops.length} stop{stops.length > 1 ? 's' : ''}
+                                </span>
+                              )}
                               {destination ? (
                                 <>
                                   <Flag className="h-4 w-4 text-red-600" />
@@ -1222,6 +1365,11 @@ export function AddNewTrip() {
                         <span className="font-medium text-slate-800">
                           {origin ? shortPlace(origin.name) : '—'}
                         </span>
+                        {validStops.length > 0 && (
+                          <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[11px] font-semibold text-violet-700">
+                            +{validStops.length} stop{validStops.length > 1 ? 's' : ''}
+                          </span>
+                        )}
                         <Navigation className="h-3.5 w-3.5 shrink-0 text-sky-500" />
                         <Flag className="h-3.5 w-3.5 shrink-0 text-red-600" />
                         <span className="font-medium text-slate-800">
@@ -1651,7 +1799,11 @@ export function AddNewTrip() {
                       <div>
                         <dt className="text-slate-500">Route</dt>
                         <dd className="mt-0.5 font-medium text-slate-900">
-                          {origin ? shortPlace(origin.name) : '—'} → {destination ? shortPlace(destination.name) : '—'}
+                          {origin ? shortPlace(origin.name) : '—'}
+                          {validStops.length > 0
+                            ? ` → (${validStops.length} stop${validStops.length > 1 ? 's' : ''}) → `
+                            : ' → '}
+                          {destination ? shortPlace(destination.name) : '—'}
                           {routeInfo?.distanceKm ? (
                             <span className="ml-1 font-normal text-slate-500">
                               ({routeInfo.distanceKm} km)

@@ -87,6 +87,22 @@ const truckIconUrl = (status, course = 0, selected = false) => {
   return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg.trim())}`;
 };
 
+// A numbered pin for a planned intermediate stop between From and To. A pin
+// rather than the amber "detected stop" circle used elsewhere on this map:
+// this marks a point the user chose on the route, not a place the vehicle was
+// observed to sit still — using the same icon for both would claim an
+// observation that hasn't happened yet.
+const waypointIconUrl = (n) => {
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="26" height="34" viewBox="0 0 26 34">
+      <path d="M13 33C13 33 24 21 24 12A11 11 0 1 0 2 12C2 21 13 33 13 33Z"
+            fill="#7c3aed" stroke="#fff" stroke-width="2"/>
+      <text x="13" y="16" text-anchor="middle" font-family="sans-serif"
+            font-size="11" font-weight="700" fill="#fff">${n}</text>
+    </svg>`;
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg.trim())}`;
+};
+
 // A simple lettered pin for trip endpoints (A = From, B = To).
 const pinIconUrl = (color, letter) => {
   const svg = `
@@ -162,6 +178,11 @@ const useIcons = (loaded) =>
         scaledSize: new Size(28, 36),
         anchor: new Point(14, 35),
       }),
+      waypoint: (n) => ({
+        url: waypointIconUrl(n),
+        scaledSize: new Size(26, 34),
+        anchor: new Point(13, 33),
+      }),
       stop: (label) => ({
         url: stopIconUrl(label),
         scaledSize: new Size(30, 30),
@@ -190,10 +211,12 @@ function MapShell({ children }) {
  * @param devices     vehicles to plot; each needs { lastPosition, status, name }
  * @param selectedId  id of the highlighted vehicle (drawn larger)
  * @param onSelect    called with a device id when its marker is clicked
- * @param route       optional { polyline, actualPath, stops, origin, destination }
+ * @param route       optional { polyline, actualPath, stops, origin, destination, waypoints }
  *                    for Trip Routes — `polyline` is the planned road route,
- *                    `actualPath` the GPS trail of the drive that happened, and
- *                    `stops` the places the vehicle stood still along the way
+ *                    `actualPath` the GPS trail of the drive that happened,
+ *                    `stops` the places the vehicle stood still along the way,
+ *                    and `waypoints` the planned intermediate stops chosen for
+ *                    the route (distinct from `stops`, which are observed)
  * @param fitTo       optional [{lat,lng}, ...] to frame; overrides panning
  * @param fitKey      optional string identifying what `fitTo` represents, so the
  *                    map re-frames when the subject changes (e.g. a new date)
@@ -371,6 +394,17 @@ export function GoogleFleetMap({
           title={route.destinationName}
         />
       )}
+
+      {/* Planned intermediate stops, numbered in travel order between A and B. */}
+      {route?.waypoints?.map((w, i) => (
+        <MarkerF
+          key={`waypoint-${i}`}
+          position={{ lat: w.lat, lng: w.lng }}
+          icon={icons.waypoint(i + 1)}
+          title={w.name}
+          zIndex={2}
+        />
+      ))}
 
       {/* Where the vehicle stood still. Drawn above both routes so a stop on
           top of the driven line stays clickable, but below the truck so the

@@ -92,17 +92,19 @@ export const tracking = {
 export const trips = {
   list: () => apiCall('/trips'),
 
-  // origin/destination are { name, lat, lng } from geo.searchPlaces; route is the
+  // origin/destination are { name, lat, lng } from geo.searchPlaces; stops is an
+  // ordered array of the same shape for intermediate waypoints; route is the
   // OSRM result from geo.getRoute (may be null if routing was unavailable).
   // routePolyline/distanceKm/durationMin may also be passed at the top level;
   // an explicit value wins over the one carried on `route`.
-  create: ({ deviceId, origin, destination, route, note = '', routePolyline, distanceKm, durationMin }) =>
+  create: ({ deviceId, origin, destination, stops, route, note = '', routePolyline, distanceKm, durationMin }) =>
     apiCall('/trips', {
       method: 'POST',
       body: JSON.stringify({
         deviceId,
         origin,
         destination,
+        stops,
         note,
         routePolyline: routePolyline ?? route?.polyline,
         distanceKm: distanceKm ?? route?.distanceKm,
@@ -268,12 +270,16 @@ export const geo = {
     }
   },
 
-  // Road route between two { lat, lng } points via the Directions API. Returns
-  // { polyline: [[lat,lng],...], distanceKm, durationMin } or null.
-  getRoute: async (from, to, { signal } = {}) => {
+  // Road route between two { lat, lng } points via the Directions API, routed
+  // through an optional ordered list of { lat, lng } intermediate stops.
+  // Returns { polyline: [[lat,lng],...], distanceKm, durationMin } or null.
+  getRoute: async (from, to, { signal, waypoints = [] } = {}) => {
     const params = new URLSearchParams({
       fromLat: from.lat, fromLng: from.lng, toLat: to.lat, toLng: to.lng,
     });
+    if (waypoints.length) {
+      params.set('waypoints', waypoints.map((w) => `${w.lat},${w.lng}`).join('|'));
+    }
     const res = await apiCall(`/geo/route?${params}`, { signal });
     return res.route;
   },
