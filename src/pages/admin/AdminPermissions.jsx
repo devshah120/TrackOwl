@@ -86,6 +86,9 @@ export function AdminPermissions() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [savingRole, setSavingRole] = useState(null);
+  // Which role's grid is on screen. Only one is shown at a time — four stacked
+  // tables was a lot of scrolling to compare two ticks.
+  const [selectedRole, setSelectedRole] = useState('');
 
   // Working copy: role -> Set of "resource:action" ticks. Edited in place and
   // compared against `baseline` to decide which rows have unsaved changes.
@@ -101,6 +104,7 @@ export function AdminPermissions() {
         next[r.role] = expand(r.grants, m.resources, m.actions);
       });
       setMatrix(m);
+      setSelectedRole((prev) => prev || m.roles[0]?.role || '');
       setDraft(next);
       setBaseline(Object.fromEntries(Object.entries(next).map(([k, v]) => [k, new Set(v)])));
       setError('');
@@ -191,6 +195,20 @@ export function AdminPermissions() {
     );
   }, [draft, baseline, matrix]);
 
+  // Switching away from a role with unsaved ticks would lose them silently, so
+  // ask first and roll the draft back to its last saved state on discard.
+  const selectRole = (role) => {
+    if (role === selectedRole) return;
+    if (dirtyRoles.has(selectedRole)) {
+      const label = matrix?.roles.find((r) => r.role === selectedRole)?.label || selectedRole;
+      if (!confirm(`Discard unsaved changes to ${label}?`)) return;
+      setDraft((prev) => ({ ...prev, [selectedRole]: new Set(baseline[selectedRole]) }));
+    }
+    setSelectedRole(role);
+  };
+
+  const activeRow = matrix?.roles.find((r) => r.role === selectedRole) || null;
+
   return (
     <div className="flex h-screen flex-col bg-slate-50">
       <Topbar />
@@ -232,30 +250,53 @@ export function AdminPermissions() {
 
           {!loading && matrix && (
             <>
-              {matrix.roles.map((roleRow) => {
-                const role = roleRow.role;
+              {activeRow && (() => {
+                const role = activeRow.role;
                 const ticks = draft[role] || new Set();
                 const isDirty = dirtyRoles.has(role);
 
                 return (
-                  <div key={role} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-6 py-4">
+                  <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                    <div className="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 bg-slate-50 px-6 py-4">
                       <div>
-                        <div className="flex items-center gap-2">
-                          <h2 className="font-semibold text-slate-900">{roleRow.label}</h2>
+                        <label
+                          htmlFor="role-select"
+                          className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500"
+                        >
+                          Editing role
+                        </label>
+                        <div className="flex items-center gap-3">
+                          <select
+                            id="role-select"
+                            value={role}
+                            onChange={(e) => selectRole(e.target.value)}
+                            className="min-w-[200px] rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            {matrix.roles.map((r) => (
+                              <option key={r.role} value={r.role}>
+                                {r.label}
+                                {dirtyRoles.has(r.role) ? ' •' : ''}
+                              </option>
+                            ))}
+                          </select>
+
                           {isDirty && (
                             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
                               Unsaved changes
                             </span>
                           )}
-                          {!isDirty && roleRow.isCustomised && (
+                          {!isDirty && activeRow.isCustomised && (
                             <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-700">
                               Customised
                             </span>
                           )}
                         </div>
-                        <p className="mt-0.5 text-xs text-slate-500">
+                        <p className="mt-1.5 text-xs text-slate-500">
                           {ticks.size} permission{ticks.size === 1 ? '' : 's'} granted
+                          {/* A dot beside a name in the dropdown marks another role
+                              left with unsaved ticks, so switching is never a
+                              silent loss. */}
+                          {dirtyRoles.size > (isDirty ? 1 : 0) && ' · other roles have unsaved changes'}
                         </p>
                       </div>
 
@@ -316,7 +357,7 @@ export function AdminPermissions() {
                                       type="checkbox"
                                       checked={ticks.has(`${resource}:${action}`)}
                                       onChange={() => toggle(role, resource, action)}
-                                      aria-label={`${roleRow.label}: ${ACTION_LABELS[action] || action} ${RESOURCE_LABELS[resource] || resource}`}
+                                      aria-label={`${activeRow.label}: ${ACTION_LABELS[action] || action} ${RESOURCE_LABELS[resource] || resource}`}
                                       className="h-4 w-4 cursor-pointer rounded border-slate-300 text-blue-600 focus:ring-2 focus:ring-blue-500"
                                     />
                                   </td>
@@ -337,7 +378,7 @@ export function AdminPermissions() {
                     </div>
                   </div>
                 );
-              })}
+              })()}
 
               <div>
                 <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
