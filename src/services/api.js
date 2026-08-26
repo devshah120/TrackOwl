@@ -224,6 +224,21 @@ export const billing = {
 };
 
 // Authenticated user's profile — company/bank details shown in Settings.
+// Company Master — the transporter's own company record: identity (name, legal
+// name, GSTIN/PAN), registered address, points of contact, logo, timezone and
+// whether the record is active. It is what the generated LRs and invoices are
+// headed with, so it lives apart from the login profile in `user` below.
+export const companies = {
+  // Resolves to { success, company } where company is null until the first save.
+  get: () => apiCall('/companies'),
+
+  // PUT creates the record on first save, so the form never has to pick a verb.
+  save: (payload) =>
+    apiCall('/companies', { method: 'PUT', body: JSON.stringify(payload) }),
+
+  remove: () => apiCall('/companies', { method: 'DELETE' }),
+};
+
 export const user = {
   getProfile: () => apiCall('/user/profile'),
 

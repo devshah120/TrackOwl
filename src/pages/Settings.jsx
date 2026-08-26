@@ -5,20 +5,36 @@ import { useAuth } from '../context/AuthContext';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { Topbar } from '../components/Topbar';
 import { SignaturePad } from '../components/SignaturePad';
-import { user as userApi } from '../services/api';
+import { user as userApi, companies as companiesApi } from '../services/api';
 
-// Uploaded signatures are downscaled in the browser before they are sent, so a
-// photo of a signed sheet does not land in the database at full camera size.
+// Uploaded signatures and logos are downscaled in the browser before they are
+// sent, so a photo of a signed sheet — or a print-resolution logo — does not
+// land in the database at full camera size.
 const MAX_SIGNATURE_WIDTH = 600;
+const MAX_LOGO_WIDTH = 400;
 
-const downscaleImage = (file) => new Promise((resolve, reject) => {
+// The zones a fleet run out of India realistically operates in — the full IANA
+// list is thousands of entries and would make the picker useless. The server
+// accepts any valid zone name, so this list can grow without a backend change.
+const TIMEZONES = [
+  'Asia/Kolkata',
+  'Asia/Dubai',
+  'Asia/Karachi',
+  'Asia/Kathmandu',
+  'Asia/Dhaka',
+  'Asia/Colombo',
+  'Asia/Singapore',
+  'UTC',
+];
+
+const downscaleImage = (file, maxWidth = MAX_SIGNATURE_WIDTH) => new Promise((resolve, reject) => {
   const reader = new FileReader();
   reader.onerror = () => reject(new Error('Could not read that file'));
   reader.onload = () => {
     const img = new Image();
     img.onerror = () => reject(new Error('That file is not a readable image'));
     img.onload = () => {
-      const scale = Math.min(1, MAX_SIGNATURE_WIDTH / img.width);
+      const scale = Math.min(1, maxWidth / img.width);
       const canvas = document.createElement('canvas');
       canvas.width = Math.round(img.width * scale);
       canvas.height = Math.round(img.height * scale);
@@ -82,15 +98,22 @@ export function SettingsPage() {
     }
   };
 
-  // Company settings state
+  // Company Master state — the transporter's own company record, which heads
+  // every generated LR and invoice. Contacts are a list; the flagged one is
+  // the number and address printed on documents.
   const [companySettings, setCompanySettings] = useState({
-    companyName: '',
-    address: '',
-    city: '',
-    mobileNumber: '',
-    gstNumber: '',
-    panNumber: '',
+    name: '',
+    legalName: '',
+    gstin: '',
+    pan: '',
+    address: { line1: '', line2: '', city: '', state: '', pincode: '', country: 'India' },
+    contacts: [],
+    timezone: 'Asia/Kolkata',
+    status: 'active',
   });
+  const [companyLogo, setCompanyLogo] = useState('');
+  const [companyError, setCompanyError] = useState('');
+  const logoInputRef = useRef(null);
 
   // Bank details state
   const [bankDetails, setBankDetails] = useState({
@@ -117,17 +140,52 @@ export function SettingsPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await userApi.getProfile();
+        // Bank details and the signature still live on the login profile; the
+        // company record is its own master. Both are needed to fill this page,
+        // so they are fetched together.
+        const [res, companyRes] = await Promise.all([
+          userApi.getProfile(),
+          companiesApi.get(),
+        ]);
         if (cancelled) return;
         const u = res.user;
+        const c = companyRes.company;
+
+        // An account that has not saved the master yet gets a form seeded from
+        // the signup profile, so the first save is a confirmation rather than
+        // re-typing details the system already holds.
         setCompanySettings({
-          companyName: u.company || '',
-          address: u.address || '',
-          city: u.city || '',
-          mobileNumber: u.mobile || '',
-          gstNumber: u.gstNumber || '',
-          panNumber: u.panNumber || '',
+          name: c?.name || u.company || '',
+          legalName: c?.legalName || '',
+          gstin: c?.gstin || u.gstNumber || '',
+          pan: c?.pan || u.panNumber || '',
+          address: {
+            line1: c?.address?.line1 || u.address || '',
+            line2: c?.address?.line2 || '',
+            city: c?.address?.city || u.city || '',
+            state: c?.address?.state || '',
+            pincode: c?.address?.pincode || '',
+            country: c?.address?.country || 'India',
+          },
+          contacts: c?.contacts?.length
+            ? c.contacts.map((ct) => ({
+                name: ct.name || '',
+                designation: ct.designation || '',
+                phone: ct.phone || '',
+                email: ct.email || '',
+                isPrimary: Boolean(ct.isPrimary),
+              }))
+            : [{
+                name: u.name || '',
+                designation: '',
+                phone: u.mobile || '',
+                email: u.email || '',
+                isPrimary: true,
+              }],
+          timezone: c?.timezone || 'Asia/Kolkata',
+          status: c?.status || 'active',
         });
+        setCompanyLogo(c?.logo?.dataUrl || '');
         setBankDetails({
           accountName: u.bankDetails?.accountName || '',
           accountNumber: u.bankDetails?.accountNumber || '',
@@ -179,21 +237,99 @@ export function SettingsPage() {
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', role: 'Operator' });
 
+  const setCompanyField = (field, value) =>
+    setCompanySettings((prev) => ({ ...prev, [field]: value }));
+
+  const setAddressField = (field, value) =>
+    setCompanySettings((prev) => ({ ...prev, address: { ...prev.address, [field]: value } }));
+
+  const setContactField = (index, field, value) =>
+    setCompanySettings((prev) => ({
+      ...prev,
+      contacts: prev.contacts.map((c, i) => (i === index ? { ...c, [field]: value } : c)),
+    }));
+
+  const addContact = () =>
+    setCompanySettings((prev) => ({
+      ...prev,
+      contacts: [
+        ...prev.contacts,
+        // The first contact added to an empty list is the primary one by
+        // default, matching what the server would decide anyway.
+        { name: '', designation: '', phone: '', email: '', isPrimary: prev.contacts.length === 0 },
+      ],
+    }));
+
+  const removeContact = (index) =>
+    setCompanySettings((prev) => {
+      const contacts = prev.contacts.filter((_, i) => i !== index);
+      // Removing the primary contact promotes the next one, so documents never
+      // lose the number they print.
+      if (contacts.length && !contacts.some((c) => c.isPrimary)) contacts[0].isPrimary = true;
+      return { ...prev, contacts };
+    });
+
+  // Exactly one contact can be primary, so selecting one clears the rest.
+  const makePrimaryContact = (index) =>
+    setCompanySettings((prev) => ({
+      ...prev,
+      contacts: prev.contacts.map((c, i) => ({ ...c, isPrimary: i === index })),
+    }));
+
+  const handleLogoFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setCompanyError('');
+
+    if (!['image/png', 'image/jpeg'].includes(file.type)) {
+      setCompanyError('Logo must be a PNG or JPG image.');
+      event.target.value = '';
+      return;
+    }
+
+    try {
+      setCompanyLogo(await downscaleImage(file, MAX_LOGO_WIDTH));
+    } catch (err) {
+      setCompanyError(err.message || 'Could not read that image');
+    } finally {
+      // Reset so re-picking the same file still fires a change event.
+      event.target.value = '';
+    }
+  };
+
   const handleSaveCompanySettings = async () => {
+    setCompanyError('');
+
+    if (!companySettings.name.trim()) {
+      setCompanyError('Company name is required.');
+      return;
+    }
+    // Caught here so the user is not told "contact name is required" by the
+    // server after a round-trip they could have been spared.
+    if (companySettings.contacts.some((c) => !c.name.trim() && (c.phone || c.email))) {
+      setCompanyError('Every contact needs a name.');
+      return;
+    }
+
     setIsSaving(true);
     try {
-      await userApi.updateProfile({
-        company: companySettings.companyName,
-        address: companySettings.address,
-        city: companySettings.city,
-        mobile: companySettings.mobileNumber,
-        gstNumber: companySettings.gstNumber,
-        panNumber: companySettings.panNumber,
+      const res = await companiesApi.save({
+        ...companySettings,
+        // Blank rows are what an untouched "Add contact" looks like; the server
+        // drops them too, but sending them back would re-render empty fields.
+        contacts: companySettings.contacts.filter((c) => c.name.trim() || c.phone || c.email),
+        logo: { dataUrl: companyLogo },
       });
-      setSuccessMessage('Company settings saved successfully!');
+      setSuccessMessage('Company details saved successfully!');
       setTimeout(() => setSuccessMessage(''), 3000);
+
+      // Keep the login profile's company name in step, since the topbar and
+      // the account menu still read it from there.
+      userApi
+        .updateProfile({ company: res.company?.name || companySettings.name })
+        .catch(() => {});
     } catch (err) {
-      setProfileError(err.message || 'Failed to save company settings');
+      setCompanyError(err.message || 'Failed to save company details');
     } finally {
       setIsSaving(false);
     }
@@ -325,13 +461,16 @@ export function SettingsPage() {
 
   const confirmClearData = () => {
     setCompanySettings({
-      companyName: '',
-      address: '',
-      city: '',
-      mobileNumber: '',
-      gstNumber: '',
-      panNumber: '',
+      name: '',
+      legalName: '',
+      gstin: '',
+      pan: '',
+      address: { line1: '', line2: '', city: '', state: '', pincode: '', country: 'India' },
+      contacts: [],
+      timezone: 'Asia/Kolkata',
+      status: 'active',
     });
+    setCompanyLogo('');
     setBankDetails({
       accountName: '',
       accountNumber: '',
@@ -454,90 +593,346 @@ export function SettingsPage() {
             </button> */}
           </div>
 
-          {/* Company Details Tab */}
+          {/* Company Master Tab */}
           {activeTab === 'company' && (
-            <div className="bg-white rounded-lg border border-slate-200 p-6">
-              <h2 className="text-xl font-semibold text-slate-900 mb-6">Company Information</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Company Name</label>
-                  <input
-                    type="text"
-                    value={companySettings.companyName}
-                    onChange={(e) => setCompanySettings({ ...companySettings, companyName: e.target.value })}
-                    placeholder="Company name"
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <p className="text-xs text-slate-500 mt-1">Appears on all documents</p>
+            <div className="space-y-6">
+              {companyError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 shrink-0" />
+                  {companyError}
                 </div>
+              )}
 
-                <div className="grid grid-cols-2 gap-4">
+              {/* Identity */}
+              <div className="bg-white rounded-lg border border-slate-200 p-6">
+                <div className="flex items-start justify-between mb-6 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">Address</label>
-                    <input
-                      type="text"
-                      value={companySettings.address}
-                      onChange={(e) => setCompanySettings({ ...companySettings, address: e.target.value })}
-                      placeholder="Street address"
-                      className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                    <h2 className="text-xl font-semibold text-slate-900">Company Information</h2>
+                    <p className="text-sm text-slate-500 mt-1">Used as the header on every LR, invoice and declaration.</p>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">City</label>
-                    <input
-                      type="text"
-                      value={companySettings.city}
-                      onChange={(e) => setCompanySettings({ ...companySettings, city: e.target.value })}
-                      placeholder="City"
-                      className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Mobile Number</label>
-                  <input
-                    type="tel"
-                    value={companySettings.mobileNumber}
-                    onChange={(e) => setCompanySettings({ ...companySettings, mobileNumber: e.target.value })}
-                    placeholder="+91-0000000000"
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">GST Number</label>
-                    <input
-                      type="text"
-                      value={companySettings.gstNumber}
-                      onChange={(e) => setCompanySettings({ ...companySettings, gstNumber: e.target.value })}
-                      placeholder="27AABCT1234H1Z0"
-                      className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-2">PAN Number</label>
-                    <input
-                      type="text"
-                      value={companySettings.panNumber}
-                      onChange={(e) => setCompanySettings({ ...companySettings, panNumber: e.target.value })}
-                      placeholder="AABCT1234H"
-                      className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-slate-200">
-                  <button
-                    onClick={handleSaveCompanySettings}
-                    disabled={isSaving}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                      companySettings.status === 'active'
+                        ? 'bg-green-50 text-green-700 border border-green-200'
+                        : 'bg-slate-100 text-slate-600 border border-slate-200'
+                    }`}
                   >
-                    <Save className="w-4 h-4" />
-                    {isSaving ? 'Saving...' : 'Save Changes'}
+                    {companySettings.status === 'active' ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Company Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={companySettings.name}
+                        onChange={(e) => setCompanyField('name', e.target.value)}
+                        placeholder="Acme Logistics"
+                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">Trading name — appears on all documents</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Legal Name</label>
+                      <input
+                        type="text"
+                        value={companySettings.legalName}
+                        onChange={(e) => setCompanyField('legalName', e.target.value)}
+                        placeholder="Acme Logistics Private Limited"
+                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">Registered entity, if different</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">GSTIN</label>
+                      <input
+                        type="text"
+                        value={companySettings.gstin}
+                        onChange={(e) => setCompanyField('gstin', e.target.value.toUpperCase())}
+                        placeholder="27AABCT1234H1Z0"
+                        maxLength={15}
+                        className="w-full px-4 py-2 border border-slate-200 rounded-lg uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">PAN</label>
+                      <input
+                        type="text"
+                        value={companySettings.pan}
+                        onChange={(e) => setCompanyField('pan', e.target.value.toUpperCase())}
+                        placeholder="AABCT1234H"
+                        maxLength={10}
+                        className="w-full px-4 py-2 border border-slate-200 rounded-lg uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Timezone</label>
+                      <select
+                        value={companySettings.timezone}
+                        onChange={(e) => setCompanyField('timezone', e.target.value)}
+                        className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        {TIMEZONES.map((tz) => (
+                          <option key={tz} value={tz}>{tz}</option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-slate-500 mt-1">Trip times are shown in this zone</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Status</label>
+                      <select
+                        value={companySettings.status}
+                        onChange={(e) => setCompanyField('status', e.target.value)}
+                        className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Inactive companies stop heading new documents
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Logo */}
+              <div className="bg-white rounded-lg border border-slate-200 p-6">
+                <h2 className="text-xl font-semibold text-slate-900 mb-1">Company Logo</h2>
+                <p className="text-sm text-slate-500 mb-6">
+                  Printed at the top-left of generated documents. PNG or JPG, under 500KB.
+                </p>
+
+                <div className="flex flex-wrap items-center gap-6">
+                  <div className="w-32 h-32 border-2 border-dashed border-slate-200 rounded-lg flex items-center justify-center bg-slate-50 overflow-hidden shrink-0">
+                    {companyLogo ? (
+                      <img src={companyLogo} alt="Company logo" className="max-w-full max-h-full object-contain" />
+                    ) : (
+                      <Building className="w-10 h-10 text-slate-300" />
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg"
+                      onChange={handleLogoFile}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => logoInputRef.current?.click()}
+                      className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                    >
+                      <Upload className="w-4 h-4" />
+                      {companyLogo ? 'Replace Logo' : 'Upload Logo'}
+                    </button>
+                    {companyLogo && (
+                      <button
+                        type="button"
+                        onClick={() => setCompanyLogo('')}
+                        className="flex items-center gap-2 px-4 py-2 text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                      >
+                        <Trash className="w-4 h-4" />
+                        Remove
+                      </button>
+                    )}
+                    <p className="text-xs text-slate-500">Large images are resized automatically.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Registered address */}
+              <div className="bg-white rounded-lg border border-slate-200 p-6">
+                <h2 className="text-xl font-semibold text-slate-900 mb-6">Registered Address</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Address Line 1</label>
+                    <input
+                      type="text"
+                      value={companySettings.address.line1}
+                      onChange={(e) => setAddressField('line1', e.target.value)}
+                      placeholder="12 MG Road"
+                      className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Address Line 2</label>
+                    <input
+                      type="text"
+                      value={companySettings.address.line2}
+                      onChange={(e) => setAddressField('line2', e.target.value)}
+                      placeholder="Unit 4, Industrial Estate"
+                      className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">City</label>
+                      <input
+                        type="text"
+                        value={companySettings.address.city}
+                        onChange={(e) => setAddressField('city', e.target.value)}
+                        placeholder="Pune"
+                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">State</label>
+                      <input
+                        type="text"
+                        value={companySettings.address.state}
+                        onChange={(e) => setAddressField('state', e.target.value)}
+                        placeholder="Maharashtra"
+                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">Pincode</label>
+                      <input
+                        type="text"
+                        value={companySettings.address.pincode}
+                        onChange={(e) => setAddressField('pincode', e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="411001"
+                        inputMode="numeric"
+                        className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+                  <div className="md:w-1/3">
+                    <label className="block text-sm font-medium text-slate-700 mb-2">Country</label>
+                    <input
+                      type="text"
+                      value={companySettings.address.country}
+                      onChange={(e) => setAddressField('country', e.target.value)}
+                      placeholder="India"
+                      className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Contacts */}
+              <div className="bg-white rounded-lg border border-slate-200 p-6">
+                <div className="flex items-start justify-between mb-6 gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold text-slate-900">Contacts</h2>
+                    <p className="text-sm text-slate-500 mt-1">
+                      The primary contact&rsquo;s phone and email are printed on documents.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addContact}
+                    className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Contact
                   </button>
                 </div>
+
+                {companySettings.contacts.length === 0 ? (
+                  <p className="text-sm text-slate-500 py-6 text-center border border-dashed border-slate-200 rounded-lg">
+                    No contacts yet. Add one so your documents carry a phone number.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {companySettings.contacts.map((contact, index) => (
+                      <div key={index} className="border border-slate-200 rounded-lg p-4 space-y-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <label className="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="primaryContact"
+                              checked={Boolean(contact.isPrimary)}
+                              onChange={() => makePrimaryContact(index)}
+                              className="w-4 h-4 text-blue-600"
+                            />
+                            Primary contact
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => removeContact(index)}
+                            className="text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                            aria-label="Remove contact"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">
+                              Name <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={contact.name}
+                              onChange={(e) => setContactField(index, 'name', e.target.value)}
+                              placeholder="Raj Kumar"
+                              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Designation</label>
+                            <input
+                              type="text"
+                              value={contact.designation}
+                              onChange={(e) => setContactField(index, 'designation', e.target.value)}
+                              placeholder="Operations Manager"
+                              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Phone</label>
+                            <input
+                              type="tel"
+                              value={contact.phone}
+                              onChange={(e) =>
+                                setContactField(index, 'phone', e.target.value.replace(/\D/g, '').slice(0, 10))
+                              }
+                              placeholder="9876543210"
+                              inputMode="numeric"
+                              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
+                            <input
+                              type="email"
+                              value={contact.email}
+                              onChange={(e) => setContactField(index, 'email', e.target.value)}
+                              placeholder="ops@acme.in"
+                              className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSaveCompanySettings}
+                  disabled={isSaving}
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  {isSaving ? 'Saving...' : 'Save Company Details'}
+                </button>
               </div>
             </div>
           )}
