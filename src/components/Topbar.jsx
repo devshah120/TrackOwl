@@ -48,6 +48,7 @@ const SUPERADMIN_NAV_ITEMS = [
   { id: 'admin-clients', label: 'Clients', icon: Users, path: '/admin/clients', match: ['admin/clients'] },
   { id: 'admin-fleet', label: 'Fleet Oversight', icon: Truck, path: '/admin/fleet', match: ['admin/fleet'] },
   { id: 'admin-tracking', label: 'Live Tracking', icon: MapPin, path: '/admin/live-tracking', match: ['admin/live-tracking'] },
+  { id: 'admin-permissions', label: 'Permissions', icon: ShieldCheck, path: '/admin/permissions', match: ['admin/permissions'] },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings', match: ['settings'] },
 ];
 

@@ -29,6 +29,7 @@ import { AdminOverview } from './pages/admin/AdminOverview';
 import { AdminClients } from './pages/admin/AdminClients';
 import { AdminFleet } from './pages/admin/AdminFleet';
 import { AdminLiveTracking } from './pages/admin/AdminLiveTracking';
+import { AdminPermissions } from './pages/admin/AdminPermissions';
 
 function App() {
   const navigate = useNavigate();
@@ -183,6 +184,14 @@ function App() {
         element={
           <ProtectedRoute requireSuperAdmin>
             <AdminLiveTracking />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/permissions"
+        element={
+          <ProtectedRoute requireSuperAdmin>
+            <AdminPermissions />
           </ProtectedRoute>
         }
       />

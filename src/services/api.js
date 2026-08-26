@@ -372,6 +372,22 @@ export const admin = {
     }),
 
   getStats: () => apiCall('/admin/stats'),
+
+  // The platform-wide role permission matrix. Editing this changes what every
+  // customer's Fleet Manager, Accountant, Viewer and Driver may do — the two
+  // admin roles are fixed in code and come back read-only under `matrix.locked`.
+  getPermissions: () => apiCall('/admin/permissions'),
+
+  // Replaces one role's grants outright; the editor holds the full list, so a
+  // replace makes clearing the last tick unambiguous.
+  savePermissions: (role, grants) =>
+    apiCall(`/admin/permissions/${role}`, {
+      method: 'PUT',
+      body: JSON.stringify({ grants }),
+    }),
+
+  resetPermissions: (role) =>
+    apiCall(`/admin/permissions/${role}/reset`, { method: 'POST' }),
 };
 
 // Public (no auth): the trip behind a share token, for the client map page.
