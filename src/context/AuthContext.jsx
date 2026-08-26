@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { auth, getAuthToken, setAuthToken, clearAuthToken } from '../services/api';
+import { ROLES } from '../constants/roles';
 
 const AuthContext = createContext();
 
@@ -114,7 +115,13 @@ export function AuthProvider({ children }) {
     isInitialized,
     error,
     isAuthenticated,
-    isSuperAdmin: user?.role === 'superadmin',
+    isSuperAdmin: user?.role === ROLES.SUPER_ADMIN,
+    // The account owner — the seat that manages the team roster and the company
+    // master. Staff seats (Fleet Manager, Accountant, Viewer, Driver) are not.
+    isCompanyAdmin: user?.role === ROLES.COMPANY_ADMIN,
+    // Whose data this session works on: the user's own account for an owner,
+    // the parent's for a staff seat.
+    accountId: user?.accountId || user?._id || null,
     login,
     register,
     logout,

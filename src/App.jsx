@@ -61,7 +61,7 @@ function App() {
       <Route
         path="/trips-and-documents"
         element={
-          <ProtectedRoute clientOnly>
+          <ProtectedRoute clientOnly resource="billing">
             <TripsAndDocuments />
           </ProtectedRoute>
         }
@@ -69,7 +69,7 @@ function App() {
       <Route
         path="/add-new-trip"
         element={
-          <ProtectedRoute clientOnly>
+          <ProtectedRoute clientOnly resource="billing">
             <AddNewTrip />
           </ProtectedRoute>
         }
@@ -77,7 +77,7 @@ function App() {
       <Route
         path="/add-new-trip/:id"
         element={
-          <ProtectedRoute clientOnly>
+          <ProtectedRoute clientOnly resource="billing">
             <AddNewTrip />
           </ProtectedRoute>
         }
@@ -85,7 +85,7 @@ function App() {
       <Route
         path="/daily-ledger"
         element={
-          <ProtectedRoute clientOnly>
+          <ProtectedRoute clientOnly resource="ledger">
             <DailyLedger />
           </ProtectedRoute>
         }
@@ -93,7 +93,7 @@ function App() {
       <Route
         path="/add-ledger-entry"
         element={
-          <ProtectedRoute clientOnly>
+          <ProtectedRoute clientOnly resource="ledger">
             <AddLedgerEntry />
           </ProtectedRoute>
         }
@@ -101,7 +101,7 @@ function App() {
       <Route
         path="/add-ledger-entry/:id"
         element={
-          <ProtectedRoute clientOnly>
+          <ProtectedRoute clientOnly resource="ledger">
             <AddLedgerEntry />
           </ProtectedRoute>
         }
@@ -109,7 +109,7 @@ function App() {
       <Route
         path="/fleet-and-drivers"
         element={
-          <ProtectedRoute clientOnly>
+          <ProtectedRoute clientOnly resource="trucks">
             <FleetAndDrivers />
           </ProtectedRoute>
         }
@@ -117,7 +117,7 @@ function App() {
       <Route
         path="/live-tracking"
         element={
-          <ProtectedRoute clientOnly>
+          <ProtectedRoute clientOnly resource="tracking">
             <FleetMap />
           </ProtectedRoute>
         }
@@ -125,7 +125,7 @@ function App() {
       <Route
         path="/trip-routes"
         element={
-          <ProtectedRoute clientOnly>
+          <ProtectedRoute clientOnly resource="tracking">
             <TripRoutes />
           </ProtectedRoute>
         }
@@ -133,7 +133,7 @@ function App() {
       <Route
         path="/add-new-truck"
         element={
-          <ProtectedRoute clientOnly>
+          <ProtectedRoute clientOnly resource="trucks">
             <AddNewTruck />
           </ProtectedRoute>
         }
@@ -141,7 +141,7 @@ function App() {
       <Route
         path="/add-new-truck/:id"
         element={
-          <ProtectedRoute clientOnly>
+          <ProtectedRoute clientOnly resource="trucks">
             <AddNewTruck />
           </ProtectedRoute>
         }

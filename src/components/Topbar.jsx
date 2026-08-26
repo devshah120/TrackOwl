@@ -3,6 +3,8 @@ import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, 
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
+import { roleLabel } from '../constants/roles';
 import { notifications as notificationsApi } from '../services/api';
 
 const NOTIFICATIONS_POLL_MS = 30000;
@@ -23,12 +25,18 @@ const timeAgo = (iso) => {
 // `path` is the real standalone route each item opens. `match` lists the URL
 // fragments that should light the item as active (a page and its sub-pages, e.g.
 // the ledger and its add-entry screen).
+//
+// `resource` is the permission resource the page needs. An item is hidden from
+// any seat holding no grant on it — an Accountant does not see Trip Routes, a
+// Driver sees neither the ledger nor the fleet. Items with no `resource` (the
+// dashboard, settings) are shown to everyone. This mirrors the API, which
+// refuses the same calls regardless of what the menu shows.
 const CLIENT_NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', match: ['dashboard'] },
-  { id: 'trips', label: 'Trips & Documents', icon: FileText, path: '/trips-and-documents', match: ['trips-and-documents', 'add-new-trip'] },
-  { id: 'ledger', label: 'Daily Ledger', icon: Calendar, path: '/daily-ledger', match: ['daily-ledger', 'add-ledger-entry'] },
-  { id: 'fleet', label: 'Fleet Management', icon: Truck, path: '/fleet-and-drivers', match: ['fleet-and-drivers', 'add-new-truck'] },
-  { id: 'triproutes', label: 'Trip Routes', icon: Route, path: '/trip-routes', match: ['trip-routes'] },
+  { id: 'trips', label: 'Trips & Documents', icon: FileText, path: '/trips-and-documents', match: ['trips-and-documents', 'add-new-trip'], resource: 'trips' },
+  { id: 'ledger', label: 'Daily Ledger', icon: Calendar, path: '/daily-ledger', match: ['daily-ledger', 'add-ledger-entry'], resource: 'ledger' },
+  { id: 'fleet', label: 'Fleet Management', icon: Truck, path: '/fleet-and-drivers', match: ['fleet-and-drivers', 'add-new-truck'], resource: 'trucks' },
+  { id: 'triproutes', label: 'Trip Routes', icon: Route, path: '/trip-routes', match: ['trip-routes'], resource: 'tracking' },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings', match: ['settings'] },
 ];
 
@@ -54,6 +62,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const navigate = useNavigate();
   const { user, logout, isSuperAdmin } = useAuth();
+  const { canAccess } = usePermissions();
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -110,7 +119,9 @@ export function Topbar({ activeMenu, onMenuChange }) {
     }
   };
 
-  const navItems = isSuperAdmin ? SUPERADMIN_NAV_ITEMS : CLIENT_NAV_ITEMS;
+  const navItems = (isSuperAdmin ? SUPERADMIN_NAV_ITEMS : CLIENT_NAV_ITEMS).filter(
+    (item) => !item.resource || canAccess(item.resource)
+  );
   const menuItems = navItems;
 
   // Which item is active: honour an explicit activeMenu prop if given, else infer
@@ -280,7 +291,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
                 </div>
                 <div className="hidden sm:block text-left">
                   <p className="text-sm font-medium text-slate-900">{user?.name || 'User'}</p>
-                  <p className="text-xs text-slate-500">{isSuperAdmin ? 'Superadmin' : 'Client'}</p>
+                  <p className="text-xs text-slate-500">{roleLabel(user?.role)}</p>
                 </div>
                 <ChevronDown className="w-4 h-4 text-slate-500" />
               </button>
@@ -292,6 +303,9 @@ export function Topbar({ activeMenu, onMenuChange }) {
                     <p className="text-sm font-medium text-slate-900">{user?.name}</p>
                     <p className="text-xs text-slate-500">{user?.email}</p>
                     <p className="text-xs text-slate-500 mt-1">{user?.company}</p>
+                    <p className="mt-2 inline-block rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700">
+                      {roleLabel(user?.role)}
+                    </p>
                   </div>
                   <button
                     onClick={() => {

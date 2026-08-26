@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { trips as tripsApi, tracking, geo } from '../services/api';
 import { Topbar } from '../components/Topbar';
+import { usePermissions } from '../hooks/usePermissions';
 import { GoogleFleetMap } from '../components/GoogleFleetMap';
 import { useNavigate } from 'react-router-dom';
 
@@ -283,6 +284,7 @@ function TripBreakdownModal({ trip, timeBudget, stops, coverage, totalIdleMs, on
 
 export function TripRoutes() {
   const navigate = useNavigate();
+  const { can } = usePermissions();
   const [devices, setDevices] = useState([]);
   const [trips, setTrips] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -675,12 +677,14 @@ export function TripRoutes() {
                       locations on the map and attach a tracker, and the trip appears here for live
                       tracking.
                     </p>
-                    <button
-                      onClick={() => navigate('/add-new-trip')}
-                      className="mt-3 flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-sky-700"
-                    >
-                      <Plus className="h-3.5 w-3.5" /> Add a trip
-                    </button>
+                    {can('billing', 'create') && (
+                      <button
+                        onClick={() => navigate('/add-new-trip')}
+                        className="mt-3 flex items-center gap-1 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-sky-700"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Add a trip
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -735,7 +739,7 @@ export function TripRoutes() {
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
-                          {t.status === 'planned' && (() => {
+                          {t.status === 'planned' && can('trips', 'update') && (() => {
                             const deviceId = t.device?._id || t.device?.id || t.device;
                             const hasActiveTrip = trips.some(
                               (other) =>
@@ -757,7 +761,7 @@ export function TripRoutes() {
                               </button>
                             );
                           })()}
-                          {t.status === 'active' && (
+                          {t.status === 'active' && can('trips', 'update') && (
                             <button
                               onClick={(e) => endTrip(t, e)}
                               title="End trip"
@@ -766,13 +770,15 @@ export function TripRoutes() {
                               <Square className="h-4 w-4" />
                             </button>
                           )}
-                          <button
-                            onClick={(e) => removeTrip(t, e)}
-                            title="Delete trip"
-                            className="shrink-0 rounded p-1 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          {can('trips', 'delete') && (
+                            <button
+                              onClick={(e) => removeTrip(t, e)}
+                              title="Delete trip"
+                              className="shrink-0 rounded p-1 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>

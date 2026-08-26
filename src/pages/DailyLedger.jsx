@@ -5,11 +5,13 @@ import { useAuth } from '../context/AuthContext';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Topbar } from '../components/Topbar';
+import { usePermissions } from '../hooks/usePermissions';
 import { ledger } from '../services/api';
 
 export function DailyLedger() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { can } = usePermissions();
   const [activeView, setActiveView] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -234,13 +236,15 @@ export function DailyLedger() {
               <h1 className="text-3xl font-bold text-slate-900">Daily Ledger</h1>
               <p className="text-slate-600 mt-1">Track your income, expenses, and profits</p>
             </div>
-            <button
-              onClick={() => navigate('/add-ledger-entry')}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Add Entry
-            </button>
+            {can('ledger', 'create') && (
+              <button
+                onClick={() => navigate('/add-ledger-entry')}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Entry
+              </button>
+            )}
           </div>
 
           {/* Enhanced Date Filter */}
@@ -589,20 +593,27 @@ export function DailyLedger() {
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => navigate(`/add-ledger-entry/${entryId}`)}
-                            className="p-2 hover:bg-slate-200 text-slate-600 rounded transition-colors"
-                            title="Edit"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteEntry(entryId)}
-                            className="p-2 hover:bg-red-50 text-red-600 rounded transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {can('ledger', 'update') && (
+                            <button
+                              onClick={() => navigate(`/add-ledger-entry/${entryId}`)}
+                              className="p-2 hover:bg-slate-200 text-slate-600 rounded transition-colors"
+                              title="Edit"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {can('ledger', 'delete') && (
+                            <button
+                              onClick={() => handleDeleteEntry(entryId)}
+                              className="p-2 hover:bg-red-50 text-red-600 rounded transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                          {!can('ledger', 'update') && !can('ledger', 'delete') && (
+                            <span className="text-xs text-slate-400">View only</span>
+                          )}
                         </div>
                       </td>
                     </tr>

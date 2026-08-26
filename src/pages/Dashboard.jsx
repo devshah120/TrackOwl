@@ -25,21 +25,30 @@ export function Dashboard() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const [fleetRes, ledgerRes, billingRes] = await Promise.all([
-          fleet.list(),
-          ledger.list(),
-          billing.list(),
-        ]);
-        if (cancelled) return;
-        setTrucksData(fleetRes.trucks);
-        setLedgerData(ledgerRes.entries);
-        setBillingData(billingRes.billingTrips);
-      } catch (err) {
-        if (!cancelled) setError(err.message || 'Failed to load dashboard data');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+      // Each section is fetched independently and its failure kept local: the
+      // dashboard is shared by every role, and an Accountant has no fleet
+      // grant while a Fleet Manager cannot read billing. A single Promise.all
+      // would let one expected 403 blank the whole page, so a section the
+      // caller may not see simply stays empty.
+      const [fleetRes, ledgerRes, billingRes] = await Promise.allSettled([
+        fleet.list(),
+        ledger.list(),
+        billing.list(),
+      ]);
+      if (cancelled) return;
+
+      if (fleetRes.status === 'fulfilled') setTrucksData(fleetRes.value.trucks || []);
+      if (ledgerRes.status === 'fulfilled') setLedgerData(ledgerRes.value.entries || []);
+      if (billingRes.status === 'fulfilled') setBillingData(billingRes.value.billingTrips || []);
+
+      // Only a genuine failure is worth a banner — a 403 is the role working
+      // as intended, not something the user can act on.
+      const realFailure = [fleetRes, ledgerRes, billingRes].find(
+        (r) => r.status === 'rejected' && r.reason?.status !== 403
+      );
+      if (realFailure) setError(realFailure.reason?.message || 'Failed to load dashboard data');
+
+      setLoading(false);
     })();
     return () => { cancelled = true; };
   }, []);

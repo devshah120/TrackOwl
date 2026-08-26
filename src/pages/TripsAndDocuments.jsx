@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { Topbar } from '../components/Topbar';
+import { usePermissions } from '../hooks/usePermissions';
 import { billing } from '../services/api';
 
 // The three documents the backend can render for a trip. `kind` matches the
@@ -17,6 +18,9 @@ const DOCUMENT_TYPES = [
 export function TripsAndDocuments() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  // This page is the billing side of a trip — the LR/invoice paperwork —
+  // so it is gated on `billing`, not on the planned-trip resource.
+  const { can } = usePermissions();
   const [activeTab, setActiveTab] = useState('trips');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
@@ -175,13 +179,15 @@ export function TripsAndDocuments() {
           <h1 className="text-3xl font-bold text-slate-900">Trips & Documents</h1>
           <p className="text-slate-600 mt-1">Manage your trips, expenses, and payment records</p>
         </div>
-        <button
-          onClick={() => navigate('/add-new-trip')}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Add New Trip
-        </button>
+        {can('billing', 'create') && (
+          <button
+            onClick={() => navigate('/add-new-trip')}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add New Trip
+          </button>
+        )}
       </div>
 
       {/* Search and Filter Bar */}
@@ -297,20 +303,24 @@ export function TripsAndDocuments() {
                         >
                           <Download className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => navigate(`/add-new-trip/${tripId}`)}
-                          className="p-2 hover:bg-slate-200 text-slate-600 rounded transition-colors"
-                          title="Edit"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteTrip(tripId)}
-                          className="p-2 hover:bg-red-50 text-red-600 rounded transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        {can('billing', 'update') && (
+                          <button
+                            onClick={() => navigate(`/add-new-trip/${tripId}`)}
+                            className="p-2 hover:bg-slate-200 text-slate-600 rounded transition-colors"
+                            title="Edit"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                        )}
+                        {can('billing', 'delete') && (
+                          <button
+                            onClick={() => handleDeleteTrip(tripId)}
+                            className="p-2 hover:bg-red-50 text-red-600 rounded transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

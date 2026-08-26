@@ -246,6 +246,41 @@ export const user = {
     apiCall('/user/profile', { method: 'PUT', body: JSON.stringify(payload) }),
 };
 
+// The team roster inside one account: the Company Admin plus the Fleet
+// Managers, Accountants, Viewers and Drivers they have added. Everything here
+// is scoped server-side to the caller's account — a company can only ever see
+// and change its own seats. Distinct from `admin.listUsers`, which is the
+// platform operator's cross-account view of account owners.
+export const users = {
+  list: () => apiCall('/users'),
+
+  // The roles this account may assign, with the permission list each carries.
+  // Fetched rather than hardcoded so the labels cannot drift from the server's
+  // enum.
+  roles: () => apiCall('/users/roles'),
+
+  create: (payload) =>
+    apiCall('/users', { method: 'POST', body: JSON.stringify(payload) }),
+
+  update: (id, payload) =>
+    apiCall(`/users/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  setStatus: (id, isActive) =>
+    apiCall(`/users/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    }),
+
+  // Admin-set password — the counterpart to the user's own OTP reset flow.
+  resetPassword: (id, newPassword) =>
+    apiCall(`/users/${id}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ newPassword }),
+    }),
+
+  remove: (id) => apiCall(`/users/${id}`, { method: 'DELETE' }),
+};
+
 // Notification bell — alerts (insurance expiry, device offline) and events
 // (truck added, trip added/completed), scoped to the caller.
 export const notifications = {

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Search, Edit2, Trash2, Filter, ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell, Phone, AlertCircle, History } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { Topbar } from '../components/Topbar';
 import { fleet } from '../services/api';
@@ -10,6 +11,7 @@ import { TruckHistory } from '../components/TruckHistory';
 export function FleetAndDrivers() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { can } = usePermissions();
   const [activeTab, setActiveTab] = useState('trucks');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -157,13 +159,15 @@ export function FleetAndDrivers() {
               <h1 className="text-3xl font-bold text-slate-900">Fleet & Drivers</h1>
               <p className="text-slate-600 mt-1">Manage your trucks and drivers efficiently</p>
             </div>
-            <button
-              onClick={() => navigate('/add-new-truck')}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="w-4 h-4" />
-              Add New Truck
-            </button>
+            {can('trucks', 'create') && (
+              <button
+                onClick={() => navigate('/add-new-truck')}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add New Truck
+              </button>
+            )}
           </div>
 
           {/* Search and Filter Bar */}
@@ -327,20 +331,27 @@ export function FleetAndDrivers() {
                         </td>
                         <td className="px-6 py-4 text-sm">
                           <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => navigate(`/add-new-truck/${truckId}`)}
-                              className="p-2 hover:bg-slate-200 text-slate-600 rounded transition-colors"
-                              title="Edit Truck Info"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteTruck(truckId)}
-                              className="p-2 hover:bg-red-50 text-red-600 rounded transition-colors"
-                              title="Remove Truck"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {can('trucks', 'update') && (
+                              <button
+                                onClick={() => navigate(`/add-new-truck/${truckId}`)}
+                                className="p-2 hover:bg-slate-200 text-slate-600 rounded transition-colors"
+                                title="Edit Truck Info"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                            )}
+                            {can('trucks', 'delete') && (
+                              <button
+                                onClick={() => handleDeleteTruck(truckId)}
+                                className="p-2 hover:bg-red-50 text-red-600 rounded transition-colors"
+                                title="Remove Truck"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                            {!can('trucks', 'update') && !can('trucks', 'delete') && (
+                              <span className="text-xs text-slate-400">View only</span>
+                            )}
                           </div>
                         </td>
                       </tr>

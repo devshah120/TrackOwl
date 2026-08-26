@@ -2,9 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { Plus, Search, Edit2, Trash2, Filter, ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell, Download, Upload, AlertCircle, Save, User, Building, CreditCard, PenTool, Trash } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { Topbar } from '../components/Topbar';
 import { SignaturePad } from '../components/SignaturePad';
+import { UserManagement } from '../components/UserManagement';
 import { user as userApi, companies as companiesApi } from '../services/api';
 
 // Uploaded signatures and logos are downscaled in the browser before they are
@@ -49,7 +51,15 @@ const downscaleImage = (file, maxWidth = MAX_SIGNATURE_WIDTH) => new Promise((re
 export function SettingsPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState('company');
+  const { can } = usePermissions();
+  // A Driver holds no grant on `users`, so the tab is hidden from them
+  // entirely; every other seat may at least see who their colleagues are.
+  const canSeeUsers = can('users', 'read');
+  // The company master, the signatory mark and the bank details are all facets
+  // of the same company record, so they share one grant. A Driver holds none of
+  // it and lands on User Management-less, company-less settings.
+  const canSeeCompany = can('company', 'read');
+  const [activeTab, setActiveTab] = useState(canSeeCompany ? 'company' : 'users');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -143,9 +153,13 @@ export function SettingsPage() {
         // Bank details and the signature still live on the login profile; the
         // company record is its own master. Both are needed to fill this page,
         // so they are fetched together.
+        //
+        // The company master is optional here: a Driver holds no `company`
+        // grant, so that call 403s for them. Their own profile still loads and
+        // the page still renders — they just see no company section.
         const [res, companyRes] = await Promise.all([
           userApi.getProfile(),
-          companiesApi.get(),
+          companiesApi.get().catch(() => ({ company: null })),
         ]);
         if (cancelled) return;
         const u = res.user;
@@ -205,37 +219,6 @@ export function SettingsPage() {
     })();
     return () => { cancelled = true; };
   }, []);
-
-  // User management state
-  const [users, setUsers] = useState([
-    {
-      id: 'USR001',
-      name: 'Raj Kumar',
-      email: 'raj@trackowl.com',
-      role: 'Admin',
-      status: 'Active',
-      dateAdded: '2026-01-15',
-    },
-    {
-      id: 'USR002',
-      name: 'Priya Singh',
-      email: 'priya@trackowl.com',
-      role: 'Manager',
-      status: 'Active',
-      dateAdded: '2026-02-20',
-    },
-    {
-      id: 'USR003',
-      name: 'Amit Patel',
-      email: 'amit@trackowl.com',
-      role: 'Operator',
-      status: 'Inactive',
-      dateAdded: '2026-03-10',
-    },
-  ]);
-
-  const [showAddUserModal, setShowAddUserModal] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'Operator' });
 
   const setCompanyField = (field, value) =>
     setCompanySettings((prev) => ({ ...prev, [field]: value }));
@@ -422,7 +405,8 @@ export function SettingsPage() {
     const dataToExport = {
       company: companySettings,
       bank: bankDetails,
-      users: users,
+      // The user roster is deliberately absent: seats live server-side with
+      // hashed passwords, and are managed under the User Management tab.
       timestamp: new Date().toISOString(),
     };
 
@@ -444,7 +428,6 @@ export function SettingsPage() {
           const data = JSON.parse(e.target.result);
           if (data.company) setCompanySettings(data.company);
           if (data.bank) setBankDetails(data.bank);
-          if (data.users) setUsers(data.users);
           setSuccessMessage('Data imported successfully!');
           setTimeout(() => setSuccessMessage(''), 3000);
         } catch (error) {
@@ -478,32 +461,9 @@ export function SettingsPage() {
       ifscCode: '',
       branchName: '',
     });
-    setUsers([]);
     setShowConfirmDialog(false);
     setSuccessMessage('All data cleared successfully!');
     setTimeout(() => setSuccessMessage(''), 3000);
-  };
-
-  const handleAddUser = () => {
-    if (newUser.name && newUser.email) {
-      const user = {
-        id: `USR${Date.now()}`,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role,
-        status: 'Active',
-        dateAdded: new Date().toISOString().split('T')[0],
-      };
-      setUsers([...users, user]);
-      setNewUser({ name: '', email: '', role: 'Operator' });
-      setShowAddUserModal(false);
-      setSuccessMessage('User added successfully!');
-      setTimeout(() => setSuccessMessage(''), 3000);
-    }
-  };
-
-  const handleDeleteUser = (id) => {
-    setUsers(users.filter(u => u.id !== id));
   };
 
   return (
@@ -536,51 +496,57 @@ export function SettingsPage() {
 
           {/* Tabs */}
           <div className="flex gap-4 border-b border-slate-200 overflow-x-auto">
-            <button
-              onClick={() => setActiveTab('company')}
-              className={`px-4 py-3 font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
-                activeTab === 'company'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Building className="w-4 h-4" />
-              Company Details
-            </button>
-            <button
-              onClick={() => setActiveTab('signature')}
-              className={`px-4 py-3 font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
-                activeTab === 'signature'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <PenTool className="w-4 h-4" />
-              Signature
-            </button>
-            <button
-              onClick={() => setActiveTab('bank')}
-              className={`px-4 py-3 font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
-                activeTab === 'bank'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <CreditCard className="w-4 h-4" />
-              Bank Details
-            </button>
+            {canSeeCompany && (
+              <>
+                <button
+                  onClick={() => setActiveTab('company')}
+                  className={`px-4 py-3 font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
+                    activeTab === 'company'
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Building className="w-4 h-4" />
+                  Company Details
+                </button>
+                <button
+                  onClick={() => setActiveTab('signature')}
+                  className={`px-4 py-3 font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
+                    activeTab === 'signature'
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <PenTool className="w-4 h-4" />
+                  Signature
+                </button>
+                <button
+                  onClick={() => setActiveTab('bank')}
+                  className={`px-4 py-3 font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
+                    activeTab === 'bank'
+                      ? 'text-blue-600 border-b-2 border-blue-600'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <CreditCard className="w-4 h-4" />
+                  Bank Details
+                </button>
+              </>
+            )}
+            {canSeeUsers && (
+              <button
+                onClick={() => setActiveTab('users')}
+                className={`px-4 py-3 font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
+                  activeTab === 'users'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <User className="w-4 h-4" />
+                User Management
+              </button>
+            )}
             {/* <button
-              onClick={() => setActiveTab('users')}
-              className={`px-4 py-3 font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
-                activeTab === 'users'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <User className="w-4 h-4" />
-              User Management
-            </button>
-            <button
               onClick={() => setActiveTab('backup')}
               className={`px-4 py-3 font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
                 activeTab === 'backup'
@@ -594,7 +560,7 @@ export function SettingsPage() {
           </div>
 
           {/* Company Master Tab */}
-          {activeTab === 'company' && (
+          {canSeeCompany && activeTab === 'company' && (
             <div className="space-y-6">
               {companyError && (
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 flex items-center gap-2">
@@ -938,7 +904,7 @@ export function SettingsPage() {
           )}
 
           {/* Signature Tab */}
-          {activeTab === 'signature' && (
+          {canSeeCompany && activeTab === 'signature' && (
             <div className="bg-white rounded-lg border border-slate-200 p-6">
               <h2 className="text-xl font-semibold text-slate-900 mb-6">Authorised Signatory</h2>
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-start gap-3">
@@ -1076,7 +1042,7 @@ export function SettingsPage() {
           )}
 
           {/* Bank Details Tab */}
-          {activeTab === 'bank' && (
+          {canSeeCompany && activeTab === 'bank' && (
             <div className="bg-white rounded-lg border border-slate-200 p-6">
               <h2 className="text-xl font-semibold text-slate-900 mb-6">Bank Details</h2>
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-start gap-3">
@@ -1155,143 +1121,13 @@ export function SettingsPage() {
             </div>
           )}
 
-          {/* User Management Tab - Commented Out */}
-          {false && activeTab === 'users' && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-slate-900">User Accounts</h2>
-                <button
-                  onClick={() => setShowAddUserModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add User
-                </button>
-              </div>
-
-              <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Name</th>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Email</th>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Role</th>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Status</th>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Date Added</th>
-                        <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {users.map((userItem) => (
-                        <tr key={userItem.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-6 py-4 text-sm font-medium text-slate-900">{userItem.name}</td>
-                          <td className="px-6 py-4 text-sm text-slate-700">{userItem.email}</td>
-                          <td className="px-6 py-4 text-sm text-slate-700">{userItem.role}</td>
-                          <td className="px-6 py-4 text-sm">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                              userItem.status === 'Active'
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-slate-100 text-slate-800'
-                            }`}>
-                              {userItem.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-slate-700">{userItem.dateAdded}</td>
-                          <td className="px-6 py-4 text-sm">
-                            <div className="flex items-center gap-2">
-                              <button
-                                className="p-2 hover:bg-slate-200 text-slate-600 rounded transition-colors"
-                                title="Edit User"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteUser(userItem.id)}
-                                className="p-2 hover:bg-red-50 text-red-600 rounded transition-colors"
-                                title="Delete User"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* User Management Tab — the account's team roster. Only shown to
+              seats holding users:read, which excludes a Driver. */}
+          {activeTab === 'users' && canSeeUsers && <UserManagement />}
 
           {/* Backup & Restore Tab - Commented Out */}
         </div>
       </main>
-
-      {/* Add User Modal */}
-      {showAddUserModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
-            <div className="p-6 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-slate-900">Add New User</h2>
-              <button
-                onClick={() => setShowAddUserModal(false)}
-                className="text-slate-500 hover:text-slate-700"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Name</label>
-                <input
-                  type="text"
-                  value={newUser.name}
-                  onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                  placeholder="Full name"
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Email</label>
-                <input
-                  type="email"
-                  value={newUser.email}
-                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  placeholder="user@example.com"
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Role</label>
-                <select
-                  value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                  className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option>Admin</option>
-                  <option>Manager</option>
-                  <option>Operator</option>
-                </select>
-              </div>
-              <div className="pt-4 flex gap-3">
-                <button
-                  onClick={() => setShowAddUserModal(false)}
-                  className="flex-1 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleAddUser}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Add User
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Confirm Clear Data Dialog */}
       {showConfirmDialog && (
