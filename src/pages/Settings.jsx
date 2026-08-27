@@ -59,6 +59,11 @@ export function SettingsPage() {
   // of the same company record, so they share one grant. A Driver holds none of
   // it and lands on User Management-less, company-less settings.
   const canSeeCompany = can('company', 'read');
+  // Company, signature and bank details are facets of one record, so one grant
+  // decides whether any of them can be saved. A seat without it still sees the
+  // tabs (that is `company:read`) but gets no Save button and no add/remove
+  // controls, rather than a 403 banner after filling the form in.
+  const canEditCompany = can('company', 'update');
   const [activeTab, setActiveTab] = useState(canSeeCompany ? 'company' : 'users');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -597,6 +602,7 @@ export function SettingsPage() {
                         type="text"
                         value={companySettings.name}
                         onChange={(e) => setCompanyField('name', e.target.value)}
+                        readOnly={!canEditCompany}
                         placeholder="Acme Logistics"
                         className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
@@ -608,6 +614,7 @@ export function SettingsPage() {
                         type="text"
                         value={companySettings.legalName}
                         onChange={(e) => setCompanyField('legalName', e.target.value)}
+                        readOnly={!canEditCompany}
                         placeholder="Acme Logistics Private Limited"
                         className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
@@ -622,6 +629,7 @@ export function SettingsPage() {
                         type="text"
                         value={companySettings.gstin}
                         onChange={(e) => setCompanyField('gstin', e.target.value.toUpperCase())}
+                        readOnly={!canEditCompany}
                         placeholder="27AABCT1234H1Z0"
                         maxLength={15}
                         className="w-full px-4 py-2 border border-slate-200 rounded-lg uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -633,6 +641,7 @@ export function SettingsPage() {
                         type="text"
                         value={companySettings.pan}
                         onChange={(e) => setCompanyField('pan', e.target.value.toUpperCase())}
+                        readOnly={!canEditCompany}
                         placeholder="AABCT1234H"
                         maxLength={10}
                         className="w-full px-4 py-2 border border-slate-200 rounded-lg uppercase focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -646,6 +655,7 @@ export function SettingsPage() {
                       <select
                         value={companySettings.timezone}
                         onChange={(e) => setCompanyField('timezone', e.target.value)}
+                        disabled={!canEditCompany}
                         className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         {TIMEZONES.map((tz) => (
@@ -659,6 +669,7 @@ export function SettingsPage() {
                       <select
                         value={companySettings.status}
                         onChange={(e) => setCompanyField('status', e.target.value)}
+                        disabled={!canEditCompany}
                         className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="active">Active</option>
@@ -694,8 +705,10 @@ export function SettingsPage() {
                       type="file"
                       accept="image/png,image/jpeg"
                       onChange={handleLogoFile}
+                      disabled={!canEditCompany}
                       className="hidden"
                     />
+                    {canEditCompany && (
                     <button
                       type="button"
                       onClick={() => logoInputRef.current?.click()}
@@ -704,7 +717,8 @@ export function SettingsPage() {
                       <Upload className="w-4 h-4" />
                       {companyLogo ? 'Replace Logo' : 'Upload Logo'}
                     </button>
-                    {companyLogo && (
+                    )}
+                    {canEditCompany && companyLogo && (
                       <button
                         type="button"
                         onClick={() => setCompanyLogo('')}
@@ -714,7 +728,9 @@ export function SettingsPage() {
                         Remove
                       </button>
                     )}
-                    <p className="text-xs text-slate-500">Large images are resized automatically.</p>
+                    {canEditCompany && (
+                      <p className="text-xs text-slate-500">Large images are resized automatically.</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -729,6 +745,7 @@ export function SettingsPage() {
                       type="text"
                       value={companySettings.address.line1}
                       onChange={(e) => setAddressField('line1', e.target.value)}
+                      readOnly={!canEditCompany}
                       placeholder="12 MG Road"
                       className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
@@ -739,6 +756,7 @@ export function SettingsPage() {
                       type="text"
                       value={companySettings.address.line2}
                       onChange={(e) => setAddressField('line2', e.target.value)}
+                      readOnly={!canEditCompany}
                       placeholder="Unit 4, Industrial Estate"
                       className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
@@ -750,6 +768,7 @@ export function SettingsPage() {
                         type="text"
                         value={companySettings.address.city}
                         onChange={(e) => setAddressField('city', e.target.value)}
+                        readOnly={!canEditCompany}
                         placeholder="Pune"
                         className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
@@ -760,6 +779,7 @@ export function SettingsPage() {
                         type="text"
                         value={companySettings.address.state}
                         onChange={(e) => setAddressField('state', e.target.value)}
+                        readOnly={!canEditCompany}
                         placeholder="Maharashtra"
                         className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
@@ -770,6 +790,7 @@ export function SettingsPage() {
                         type="text"
                         value={companySettings.address.pincode}
                         onChange={(e) => setAddressField('pincode', e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        readOnly={!canEditCompany}
                         placeholder="411001"
                         inputMode="numeric"
                         className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -782,6 +803,7 @@ export function SettingsPage() {
                       type="text"
                       value={companySettings.address.country}
                       onChange={(e) => setAddressField('country', e.target.value)}
+                      readOnly={!canEditCompany}
                       placeholder="India"
                       className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
@@ -798,6 +820,7 @@ export function SettingsPage() {
                       The primary contact&rsquo;s phone and email are printed on documents.
                     </p>
                   </div>
+                  {canEditCompany && (
                   <button
                     type="button"
                     onClick={addContact}
@@ -806,6 +829,7 @@ export function SettingsPage() {
                     <Plus className="w-4 h-4" />
                     Add Contact
                   </button>
+                  )}
                 </div>
 
                 {companySettings.contacts.length === 0 ? (
@@ -823,10 +847,12 @@ export function SettingsPage() {
                               name="primaryContact"
                               checked={Boolean(contact.isPrimary)}
                               onChange={() => makePrimaryContact(index)}
+                              disabled={!canEditCompany}
                               className="w-4 h-4 text-blue-600"
                             />
                             Primary contact
                           </label>
+                          {canEditCompany && (
                           <button
                             type="button"
                             onClick={() => removeContact(index)}
@@ -835,6 +861,7 @@ export function SettingsPage() {
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
+                          )}
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -846,6 +873,7 @@ export function SettingsPage() {
                               type="text"
                               value={contact.name}
                               onChange={(e) => setContactField(index, 'name', e.target.value)}
+                              readOnly={!canEditCompany}
                               placeholder="Raj Kumar"
                               className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
@@ -856,6 +884,7 @@ export function SettingsPage() {
                               type="text"
                               value={contact.designation}
                               onChange={(e) => setContactField(index, 'designation', e.target.value)}
+                              readOnly={!canEditCompany}
                               placeholder="Operations Manager"
                               className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
@@ -879,6 +908,7 @@ export function SettingsPage() {
                               type="email"
                               value={contact.email}
                               onChange={(e) => setContactField(index, 'email', e.target.value)}
+                              readOnly={!canEditCompany}
                               placeholder="ops@acme.in"
                               className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
@@ -890,7 +920,8 @@ export function SettingsPage() {
                 )}
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex justify-end items-center">
+                {canEditCompany ? (
                 <button
                   onClick={handleSaveCompanySettings}
                   disabled={isSaving}
@@ -899,6 +930,11 @@ export function SettingsPage() {
                   <Save className="w-4 h-4" />
                   {isSaving ? 'Saving...' : 'Save Company Details'}
                 </button>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    Your role can view the company details but not change them.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -934,6 +970,7 @@ export function SettingsPage() {
                         className="h-16 max-w-[240px] object-contain"
                       />
                     </div>
+                    {canEditCompany && (
                     <button
                       onClick={handleRemoveSignature}
                       disabled={isSaving}
@@ -942,10 +979,22 @@ export function SettingsPage() {
                       <Trash className="w-4 h-4" />
                       Remove
                     </button>
+                    )}
                   </div>
                 </div>
               )}
 
+              {/* The editor itself — drawing pad, upload and Save. Hidden
+                  wholesale for a seat without `company:update`: a canvas whose
+                  result can never be saved is worse than no canvas. */}
+              {!canEditCompany ? (
+                <p className="text-xs text-slate-500">
+                  {signature.dataUrl
+                    ? 'Your role can view the signature but not change it.'
+                    : 'No signature saved yet. Your role cannot add one.'}
+                </p>
+              ) : (
+              <>
               {/* Draw / Upload switch */}
               <div className="inline-flex rounded-lg border border-slate-200 p-1 bg-slate-50 mb-4">
                 {[['draw', 'Draw'], ['upload', 'Upload']].map(([mode, label]) => (
@@ -1038,6 +1087,8 @@ export function SettingsPage() {
                   </button>
                 </div>
               </div>
+              </>
+              )}
             </div>
           )}
 
@@ -1056,6 +1107,7 @@ export function SettingsPage() {
                     type="text"
                     value={bankDetails.accountName}
                     onChange={(e) => setBankDetails({ ...bankDetails, accountName: e.target.value })}
+                    readOnly={!canEditCompany}
                     placeholder="Account holder name"
                     className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
@@ -1068,6 +1120,7 @@ export function SettingsPage() {
                       type="text"
                       value={bankDetails.accountNumber}
                       onChange={(e) => setBankDetails({ ...bankDetails, accountNumber: e.target.value })}
+                      readOnly={!canEditCompany}
                       placeholder="Account number"
                       className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
@@ -1078,6 +1131,7 @@ export function SettingsPage() {
                       type="text"
                       value={bankDetails.bankName}
                       onChange={(e) => setBankDetails({ ...bankDetails, bankName: e.target.value })}
+                      readOnly={!canEditCompany}
                       placeholder="Bank name"
                       className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
@@ -1091,6 +1145,7 @@ export function SettingsPage() {
                       type="text"
                       value={bankDetails.ifscCode}
                       onChange={(e) => setBankDetails({ ...bankDetails, ifscCode: e.target.value })}
+                      readOnly={!canEditCompany}
                       placeholder="HDFC0000001"
                       className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
@@ -1101,6 +1156,7 @@ export function SettingsPage() {
                       type="text"
                       value={bankDetails.branchName}
                       onChange={(e) => setBankDetails({ ...bankDetails, branchName: e.target.value })}
+                      readOnly={!canEditCompany}
                       placeholder="Branch name"
                       className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
@@ -1108,6 +1164,7 @@ export function SettingsPage() {
                 </div>
 
                 <div className="pt-4 border-t border-slate-200">
+                  {canEditCompany ? (
                   <button
                     onClick={handleSaveBankDetails}
                     disabled={isSaving}
@@ -1116,6 +1173,11 @@ export function SettingsPage() {
                     <Save className="w-4 h-4" />
                     {isSaving ? 'Saving...' : 'Save Changes'}
                   </button>
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      Your role can view the bank details but not change them.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

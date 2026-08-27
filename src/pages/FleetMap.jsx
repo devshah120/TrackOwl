@@ -5,6 +5,7 @@ import { AddDeviceModal } from '../components/AddDeviceModal';
 import { Topbar } from '../components/Topbar';
 import { GoogleFleetMap } from '../components/GoogleFleetMap';
 import { STATUS_COLOR } from '../components/mapConstants';
+import { usePermissions } from '../hooks/usePermissions';
 
 const POLL_MS = 5000;
 
@@ -17,6 +18,11 @@ const timeAgo = (iso) => {
 };
 
 export function FleetMap() {
+  // Mirrors the grants routes/track.js enforces: adding a vehicle and minting a
+  // share link are both `tracking:create`, removing one is `tracking:delete`.
+  const { can } = usePermissions();
+  const canAddDevice = can('tracking', 'create');
+  const canRemoveDevice = can('tracking', 'delete');
   const [devices, setDevices] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [error, setError] = useState(null);
@@ -114,6 +120,7 @@ export function FleetMap() {
               <Truck className="h-5 w-5 text-sky-600" />
               Live Fleet
             </h2>
+            {canAddDevice && (
             <button
               onClick={() => setAdding(true)}
               title="Add a vehicle"
@@ -122,6 +129,7 @@ export function FleetMap() {
               <Plus className="h-3.5 w-3.5" />
               Add
             </button>
+            )}
           </div>
           <div className="mt-3 flex gap-2 text-xs">
             <span className="rounded-full bg-green-50 px-2 py-1 font-medium text-green-700">
@@ -180,6 +188,7 @@ export function FleetMap() {
                     {Math.round(d.lastPosition?.speed || 0)} km/h · {timeAgo(d.lastSeenAt)}
                   </p>
                 </div>
+                {canRemoveDevice && (
                 <button
                   onClick={(e) => removeDevice(d, e)}
                   title="Remove device"
@@ -187,13 +196,14 @@ export function FleetMap() {
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
+                )}
               </div>
             );
           })}
         </div>
 
         {/* ---- share link (Milestone 3) ----------------------------------- */}
-        {selected && (
+        {selected && canAddDevice && (
           <div className="border-t border-slate-200 p-4">
             <button
               onClick={createLink}
@@ -252,7 +262,7 @@ export function FleetMap() {
         )}
       </div>
 
-        {adding && (
+        {adding && canAddDevice && (
           <AddDeviceModal
             onClose={() => setAdding(false)}
             onRegistered={load}          // pull the new vehicle straight into the list

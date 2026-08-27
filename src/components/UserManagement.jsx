@@ -248,7 +248,14 @@ function ResetPasswordModal({ target, onClose, onDone }) {
 // allows.
 export function UserManagement() {
   const { user: currentUser } = useAuth();
-  const { isAccountOwner } = usePermissions();
+  const { can } = usePermissions();
+  // Per-verb, straight from the matrix a Super Admin edits — the same grants
+  // the API enforces. `canManage` is only "does any action button belong in
+  // this row at all?", so the Actions column disappears for a read-only seat.
+  const canAdd = can('users', 'create');
+  const canEdit = can('users', 'update');
+  const canRemove = can('users', 'delete');
+  const canManage = canAdd || canEdit || canRemove;
 
   const [team, setTeam] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -329,7 +336,7 @@ export function UserManagement() {
             they may change.
           </p>
         </div>
-        {isAccountOwner && (
+        {canAdd && (
           <button
             onClick={() => setEditing('new')}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -366,7 +373,7 @@ export function UserManagement() {
                   <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Role</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Status</th>
                   <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Added</th>
-                  {isAccountOwner && (
+                  {canManage && (
                     <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Actions</th>
                   )}
                 </tr>
@@ -407,12 +414,13 @@ export function UserManagement() {
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-700">{formatDate(row.createdAt)}</td>
 
-                      {isAccountOwner && (
+                      {canManage && (
                         <td className="px-6 py-4 text-sm">
                           {locked ? (
                             <span className="text-xs text-slate-400">Manage under Company Details</span>
                           ) : (
                             <div className="flex items-center gap-2">
+                              {canEdit && (
                               <button
                                 onClick={() => toggleActive(row)}
                                 disabled={busyId === id}
@@ -426,18 +434,25 @@ export function UserManagement() {
                                 {row.isActive ? <XCircle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                                 {row.isActive ? 'Deactivate' : 'Activate'}
                               </button>
+                              )}
+                              {canEdit && (
                               <button onClick={() => setEditing(row)} title="Edit user"
                                 className="p-2 hover:bg-slate-200 text-slate-600 rounded transition-colors">
                                 <Edit2 className="w-4 h-4" />
                               </button>
+                              )}
+                              {canEdit && (
                               <button onClick={() => setResetting(row)} title="Reset password"
                                 className="p-2 hover:bg-slate-200 text-slate-600 rounded transition-colors">
                                 <KeyRound className="w-4 h-4" />
                               </button>
+                              )}
+                              {canRemove && (
                               <button onClick={() => remove(row)} disabled={busyId === id} title="Remove user"
                                 className="p-2 hover:bg-red-50 text-red-600 rounded transition-colors disabled:opacity-50">
                                 <Trash2 className="w-4 h-4" />
                               </button>
+                              )}
                             </div>
                           )}
                         </td>
@@ -455,9 +470,9 @@ export function UserManagement() {
         </div>
       )}
 
-      {!isAccountOwner && !loading && (
+      {!canManage && !loading && (
         <p className="text-xs text-slate-500">
-          Only a Company Admin can add or change users. You are seeing this list read-only.
+          Your role cannot add or change users. You are seeing this list read-only.
         </p>
       )}
 
