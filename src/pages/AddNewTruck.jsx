@@ -254,9 +254,9 @@ export function AddNewTruck() {
               <ArrowLeft className="w-5 h-5 text-slate-600" />
             </button>
             <div>
-              <h1 className="text-3xl font-bold text-slate-900">{isEditing ? 'Edit Truck' : 'Add New Truck'}</h1>
+              <h1 className="text-3xl font-bold text-slate-900">{isEditing ? 'Edit Vehicle' : 'Add New Vehicle'}</h1>
               <p className="text-slate-600 mt-1">
-                {isEditing ? 'Update truck and driver details' : 'Register a new truck and assign a driver'}
+                {isEditing ? 'Update vehicle and driver details' : 'Register a new vehicle and assign a driver'}
               </p>
             </div>
           </div>
@@ -269,12 +269,12 @@ export function AddNewTruck() {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Truck Details */}
+            {/* Vehicle Details */}
             <div className="bg-white rounded-lg border border-slate-200 p-6">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">Truck Details</h2>
+              <h2 className="text-lg font-semibold text-slate-900 mb-4">Vehicle Details</h2>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Truck Number</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Vehicle Number</label>
                   <input
                     type="text"
                     name="truckNumber"
@@ -636,7 +636,7 @@ export function AddNewTruck() {
                 disabled={submitting}
                 className="flex-1 px-4 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60"
               >
-                {submitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Add Truck'}
+                {submitting ? 'Saving...' : isEditing ? 'Save Changes' : 'Add Vehicle'}
               </button>
             </div>
           </form>
