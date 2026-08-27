@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Users, Truck, Radio, Wallet } from 'lucide-react';
 import { Topbar } from '../../components/Topbar';
 import { admin } from '../../services/api';
+import { VEHICLE_STATUSES, getStatusDot } from '../../constants/vehicle';
 
 const StatCard = ({ icon: Icon, label, value, accent }) => (
   <div className="bg-white rounded-lg border border-slate-200 p-5 flex items-center gap-4">
@@ -86,11 +87,11 @@ export function AdminOverview() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Breakdown
                   title="Trucks by Status"
-                  rows={[
-                    ['Running', stats.trucksByStatus.Running, 'bg-green-500'],
-                    ['Idle', stats.trucksByStatus.Idle, 'bg-yellow-500'],
-                    ['Stopped', stats.trucksByStatus.Stopped, 'bg-red-500'],
-                  ]}
+                  rows={VEHICLE_STATUSES.map((st) => [
+                    st,
+                    stats.trucksByStatus[st] || 0,
+                    getStatusDot(st),
+                  ])}
                 />
                 <Breakdown
                   title="Devices by Status"

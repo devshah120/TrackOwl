@@ -2,6 +2,11 @@ import { useState, useEffect } from 'react';
 import { TrendingUp, Truck, AlertCircle, Check } from 'lucide-react';
 import { FleetMapWidget } from '../components/FleetMapWidget';
 import { fleet, ledger, billing, tracking } from '../services/api';
+import {
+  ACTIVE_STATUSES,
+  VEHICLE_STATUSES,
+  getStatusColor as vehicleStatusColor,
+} from '../constants/vehicle';
 
 const DEVICE_POLL_MS = 5000;
 
@@ -81,7 +86,9 @@ export function Dashboard() {
   const pendingBalance = billingData
     .filter((b) => b.status !== 'Paid')
     .reduce((sum, b) => sum + b.amount, 0);
-  const activeTruckCount = trucksData.filter((t) => t.status === 'Running').length;
+  // "Active" covers both in-service states: parked-and-available counts as
+  // fleet strength, a truck in Maintenance or retired does not.
+  const activeTruckCount = trucksData.filter((t) => ACTIVE_STATUSES.includes(t.status)).length;
 
   const stats = [
     {
@@ -147,7 +154,11 @@ export function Dashboard() {
       daysOverdue: Math.max(0, Math.floor((Date.now() - new Date(b.date)) / (1000 * 60 * 60 * 24))),
     }));
 
+  // Vehicle statuses come from the shared palette; the cases below are the
+  // device ('moving'/'idle'/...) and billing ('Paid'/...) vocabularies, which
+  // this table also renders.
   const getStatusColor = (status) => {
+    if (VEHICLE_STATUSES.includes(status)) return vehicleStatusColor(status);
     switch (status) {
       case 'moving':
         return 'bg-blue-100 text-blue-800';
@@ -157,12 +168,6 @@ export function Dashboard() {
         return 'bg-red-100 text-red-800';
       case 'offline':
         return 'bg-gray-100 text-gray-800';
-      case 'Running':
-        return 'bg-green-100 text-green-800';
-      case 'Idle':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'Stopped':
-        return 'bg-red-100 text-red-800';
       case 'Paid':
         return 'bg-green-100 text-green-800';
       case 'Partial':

@@ -6,6 +6,13 @@ import { usePermissions } from '../hooks/usePermissions';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { Topbar } from '../components/Topbar';
 import { fleet } from '../services/api';
+import {
+  VEHICLE_STATUSES,
+  getStatusColor,
+  getStatusDot,
+  formatWeight,
+  formatOdometer,
+} from '../constants/vehicle';
 import { TruckHistory } from '../components/TruckHistory';
 
 export function FleetAndDrivers() {
@@ -98,32 +105,6 @@ export function FleetAndDrivers() {
     return matchesSearch && truck.status.toLowerCase() === filterStatus;
   });
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Running':
-        return 'bg-green-100 text-green-800';
-      case 'Idle':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'Stopped':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-slate-100 text-slate-800';
-    }
-  };
-
-  const getStatusDot = (status) => {
-    switch (status) {
-      case 'Running':
-        return 'bg-green-500';
-      case 'Idle':
-        return 'bg-yellow-500';
-      case 'Stopped':
-        return 'bg-red-500';
-      default:
-        return 'bg-slate-500';
-    }
-  };
-
   const isInsuranceExpiringSoon = (expiryDate) => {
     const expiry = new Date(expiryDate);
     const today = new Date();
@@ -191,9 +172,9 @@ export function FleetAndDrivers() {
                   className="px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="all">All Status</option>
-                  <option value="running">Running</option>
-                  <option value="idle">Idle</option>
-                  <option value="stopped">Stopped</option>
+                  {VEHICLE_STATUSES.map((st) => (
+                    <option key={st} value={st.toLowerCase()}>{st}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -253,6 +234,8 @@ export function FleetAndDrivers() {
                     <tr>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Truck</th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Model</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Type</th>
+                      <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Capacity</th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Drivers</th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Mobile</th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Salary</th>
@@ -270,7 +253,24 @@ export function FleetAndDrivers() {
                       return (
                       <tr key={truckId} className="hover:bg-slate-50 transition-colors align-top">
                         <td className="px-6 py-4 text-sm font-medium text-blue-600">{truck.number}</td>
-                        <td className="px-6 py-4 text-sm text-slate-700">{truck.model}</td>
+                        <td className="px-6 py-4 text-sm text-slate-700">
+                          {truck.model}
+                          {truck.make && (
+                            <span className="block text-xs text-slate-500">{truck.make}</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-700 whitespace-nowrap">
+                          {truck.vehicleType || '—'}
+                          <span className="block text-xs text-slate-500">
+                            {[truck.fuelType, truck.manufactureYear].filter(Boolean).join(' · ') || '—'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-700 whitespace-nowrap">
+                          {formatWeight(truck.capacity?.weightKg)}
+                          <span className="block text-xs text-slate-500">
+                            {truck.capacity?.bodyType || '—'} · {formatOdometer(truck.odometer)}
+                          </span>
+                        </td>
                         <td className="px-6 py-4 text-sm text-slate-700">
                           {truckDrivers.length === 0 ? (
                             <span className="text-slate-400">—</span>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Search, Edit2, Trash2, X, Phone, Star } from 'lucide-react';
 import { Topbar } from '../../components/Topbar';
 import { admin } from '../../services/api';
+import { getStatusColor } from '../../constants/vehicle';
 
 const emptyForm = {
   owner: '',
@@ -311,11 +312,6 @@ export function AdminFleet() {
     );
   });
 
-  const statusColor = (status) => ({
-    Running: 'bg-green-100 text-green-800',
-    Idle: 'bg-yellow-100 text-yellow-800',
-    Stopped: 'bg-red-100 text-red-800',
-  }[status] || 'bg-slate-100 text-slate-800');
 
   return (
     <div className="flex flex-col h-screen bg-slate-50">
@@ -413,7 +409,7 @@ export function AdminFleet() {
                             )}
                           </td>
                           <td className="px-6 py-4 text-sm">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusColor(truck.status)}`}>
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(truck.status)}`}>
                               {truck.status}
                             </span>
                           </td>

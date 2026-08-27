@@ -5,6 +5,12 @@ import { useAuth } from '../context/AuthContext';
 import { LayoutDashboard, FileText, Calendar, Truck, Settings } from 'lucide-react';
 import { Topbar } from '../components/Topbar';
 import { fleet } from '../services/api';
+import {
+  VEHICLE_TYPES,
+  FUEL_TYPES,
+  BODY_TYPES,
+  VEHICLE_STATUSES,
+} from '../constants/vehicle';
 
 // One blank driver row. `_id` is absent until the server assigns one, which is
 // how the backend tells a new driver from an edit of an existing one.
@@ -17,6 +23,11 @@ const emptyDriver = () => ({
   isPrimary: false,
 });
 
+// Every field in this form wears the same box; naming it keeps the markup
+// readable now that there are four sections of them.
+const inputClass =
+  'w-full px-4 py-2 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500';
+
 export function AddNewTruck() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -26,11 +37,26 @@ export function AddNewTruck() {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  // Flat form state: the nested capacity/purchase shape the API expects is
+  // assembled at submit time, which keeps every input a plain controlled field.
   const [formData, setFormData] = useState({
     truckNumber: '',
     model: '',
     registrationDate: '',
     insuranceExpiry: '',
+    vehicleType: 'Truck',
+    make: '',
+    manufactureYear: '',
+    fuelType: 'Diesel',
+    odometer: '',
+    status: 'Idle',
+    capacityWeightKg: '',
+    capacityVolumeM3: '',
+    bodyType: 'Open',
+    purchaseDate: '',
+    purchasePrice: '',
+    purchaseVendor: '',
+    financedBy: '',
   });
   // A truck carries one or more drivers; the first row starts out primary.
   const [drivers, setDrivers] = useState([{ ...emptyDriver(), isPrimary: true }]);
@@ -43,11 +69,26 @@ export function AddNewTruck() {
         const res = await fleet.list();
         const truck = res.trucks.find((t) => (t._id || t.id) === id);
         if (!truck || cancelled) return;
+        // `?? ''` rather than `|| ''` for the numbers: a genuine 0 odometer or
+        // price must survive into the field instead of showing as blank.
         setFormData({
           truckNumber: truck.number || '',
           model: truck.model || '',
           registrationDate: truck.registrationDate ? truck.registrationDate.slice(0, 10) : '',
           insuranceExpiry: truck.insuranceExpiry ? truck.insuranceExpiry.slice(0, 10) : '',
+          vehicleType: truck.vehicleType || 'Truck',
+          make: truck.make || '',
+          manufactureYear: truck.manufactureYear ?? '',
+          fuelType: truck.fuelType || 'Diesel',
+          odometer: truck.odometer ?? '',
+          status: truck.status || 'Idle',
+          capacityWeightKg: truck.capacity?.weightKg ?? '',
+          capacityVolumeM3: truck.capacity?.volumeM3 ?? '',
+          bodyType: truck.capacity?.bodyType || 'Open',
+          purchaseDate: truck.purchase?.date ? truck.purchase.date.slice(0, 10) : '',
+          purchasePrice: truck.purchase?.price ?? '',
+          purchaseVendor: truck.purchase?.vendor || '',
+          financedBy: truck.purchase?.financedBy || '',
         });
 
         // Fall back to the legacy single `driver` for trucks saved before
@@ -157,6 +198,23 @@ export function AddNewTruck() {
         model: formData.model,
         registrationDate: formData.registrationDate || undefined,
         insuranceExpiry: formData.insuranceExpiry || undefined,
+        vehicleType: formData.vehicleType,
+        make: formData.make,
+        manufactureYear: formData.manufactureYear === '' ? null : Number(formData.manufactureYear),
+        fuelType: formData.fuelType,
+        odometer: formData.odometer === '' ? 0 : Number(formData.odometer),
+        status: formData.status,
+        capacity: {
+          weightKg: formData.capacityWeightKg === '' ? null : Number(formData.capacityWeightKg),
+          volumeM3: formData.capacityVolumeM3 === '' ? null : Number(formData.capacityVolumeM3),
+          bodyType: formData.bodyType,
+        },
+        purchase: {
+          date: formData.purchaseDate || undefined,
+          price: formData.purchasePrice === '' ? null : Number(formData.purchasePrice),
+          vendor: formData.purchaseVendor,
+          financedBy: formData.financedBy,
+        },
         drivers: filled.map((d) => ({
           ...(d._id ? { _id: d._id } : {}),
           name: d.name.trim(),
@@ -358,7 +416,7 @@ export function AddNewTruck() {
               </div>
             </div>
 
-            {/* Vehicle Details */}
+            {/* Vehicle Details — registration, classification and status. */}
             <div className="bg-white rounded-lg border border-slate-200 p-6">
               <h2 className="text-lg font-semibold text-slate-900 mb-4">Vehicle Details</h2>
               <div className="grid grid-cols-2 gap-4">
@@ -369,7 +427,7 @@ export function AddNewTruck() {
                     name="registrationDate"
                     value={formData.registrationDate}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={inputClass}
                   />
                 </div>
                 <div>
@@ -379,7 +437,186 @@ export function AddNewTruck() {
                     name="insuranceExpiry"
                     value={formData.insuranceExpiry}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Vehicle Type</label>
+                  <select
+                    name="vehicleType"
+                    value={formData.vehicleType}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                  >
+                    {VEHICLE_TYPES.map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Make</label>
+                  <input
+                    type="text"
+                    name="make"
+                    placeholder="e.g., Tata"
+                    value={formData.make}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Manufacture Year</label>
+                  <input
+                    type="number"
+                    name="manufactureYear"
+                    placeholder="e.g., 2021"
+                    min="1980"
+                    max={new Date().getFullYear() + 1}
+                    value={formData.manufactureYear}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Fuel Type</label>
+                  <select
+                    name="fuelType"
+                    value={formData.fuelType}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                  >
+                    {FUEL_TYPES.map((f) => (
+                      <option key={f} value={f}>{f}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Odometer (km)</label>
+                  <input
+                    type="number"
+                    name="odometer"
+                    placeholder="0"
+                    min="0"
+                    value={formData.odometer}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                  />
+                  {isEditing && (
+                    <p className="mt-1 text-xs text-slate-500">
+                      An odometer reading can only be increased.
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Status</label>
+                  <select
+                    name="status"
+                    value={formData.status}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                  >
+                    {VEHICLE_STATUSES.map((st) => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Capacity — what the vehicle can carry. */}
+            <div className="bg-white rounded-lg border border-slate-200 p-6">
+              <h2 className="text-lg font-semibold text-slate-900 mb-1">Capacity</h2>
+              <p className="text-sm text-slate-500 mb-4">
+                Used to match vehicles against load requirements when planning trips.
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Payload Weight (kg)</label>
+                  <input
+                    type="number"
+                    name="capacityWeightKg"
+                    placeholder="e.g., 9000"
+                    min="0"
+                    value={formData.capacityWeightKg}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Volume (m³)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    name="capacityVolumeM3"
+                    placeholder="e.g., 32"
+                    min="0"
+                    value={formData.capacityVolumeM3}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Body Type</label>
+                  <select
+                    name="bodyType"
+                    value={formData.bodyType}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                  >
+                    {BODY_TYPES.map((b) => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Purchase Details — how the asset was acquired. */}
+            <div className="bg-white rounded-lg border border-slate-200 p-6">
+              <h2 className="text-lg font-semibold text-slate-900 mb-4">Purchase Details</h2>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Purchase Date</label>
+                  <input
+                    type="date"
+                    name="purchaseDate"
+                    value={formData.purchaseDate}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Purchase Price (₹)</label>
+                  <input
+                    type="number"
+                    name="purchasePrice"
+                    placeholder="0"
+                    min="0"
+                    value={formData.purchasePrice}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Vendor / Dealer</label>
+                  <input
+                    type="text"
+                    name="purchaseVendor"
+                    placeholder="e.g., Sharma Motors"
+                    value={formData.purchaseVendor}
+                    onChange={handleInputChange}
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Financed By</label>
+                  <input
+                    type="text"
+                    name="financedBy"
+                    placeholder="Bank or NBFC — leave blank if owned outright"
+                    value={formData.financedBy}
+                    onChange={handleInputChange}
+                    className={inputClass}
                   />
                 </div>
               </div>
