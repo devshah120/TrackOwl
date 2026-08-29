@@ -46,10 +46,10 @@ const CLIENT_NAV_ITEMS = [
     label: 'Fleet Management',
     icon: Truck,
     path: '/fleet-and-drivers',
-    match: ['fleet-and-drivers', 'add-new-truck', 'drivers'],
+    match: ['fleet-and-drivers', 'add-new-truck', 'drivers', 'add-new-driver'],
     children: [
       { id: 'fleet-vehicles', label: 'Vehicles', icon: Truck, path: '/fleet-and-drivers', match: ['fleet-and-drivers', 'add-new-truck'], resource: 'trucks' },
-      { id: 'fleet-drivers', label: 'Drivers', icon: UserRound, path: '/drivers', match: ['drivers'], resource: 'drivers' },
+      { id: 'fleet-drivers', label: 'Drivers', icon: UserRound, path: '/drivers', match: ['drivers', 'add-new-driver'], resource: 'drivers' },
     ],
   },
   { id: 'triproutes', label: 'Trip Routes', icon: Route, path: '/trip-routes', match: ['trip-routes'], resource: 'tracking' },

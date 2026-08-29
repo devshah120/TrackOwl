@@ -21,6 +21,7 @@ import { DailyLedger } from './pages/DailyLedger';
 import { AddLedgerEntry } from './pages/AddLedgerEntry';
 import { FleetAndDrivers } from './pages/FleetAndDrivers';
 import { Drivers } from './pages/Drivers';
+import { AddNewDriver } from './pages/AddNewDriver';
 import { FleetMap } from './pages/FleetMap';
 import { TripRoutes } from './pages/TripRoutes';
 import { AddNewTruck } from './pages/AddNewTruck';
@@ -121,6 +122,22 @@ function App() {
         element={
           <ProtectedRoute clientOnly resource="drivers">
             <Drivers />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/add-new-driver"
+        element={
+          <ProtectedRoute clientOnly resource="drivers">
+            <AddNewDriver />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/add-new-driver/:id"
+        element={
+          <ProtectedRoute clientOnly resource="drivers">
+            <AddNewDriver />
           </ProtectedRoute>
         }
       />

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronDown, LogOut, Menu, X, Bell, ArrowLeft, Plus, Trash2, Star } from 'lucide-react';
+import { ChevronDown, LogOut, Menu, X, Bell, ArrowLeft } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LayoutDashboard, FileText, Calendar, Truck, Settings } from 'lucide-react';
@@ -11,17 +11,6 @@ import {
   BODY_TYPES,
   VEHICLE_STATUSES,
 } from '../constants/vehicle';
-
-// One blank driver row. `_id` is absent until the server assigns one, which is
-// how the backend tells a new driver from an edit of an existing one.
-const emptyDriver = () => ({
-  name: '',
-  mobile: '',
-  licenseNumber: '',
-  licenseExpiry: '',
-  salary: '',
-  isPrimary: false,
-});
 
 // Every field in this form wears the same box; naming it keeps the markup
 // readable now that there are four sections of them.
@@ -58,8 +47,6 @@ export function AddNewTruck() {
     purchaseVendor: '',
     financedBy: '',
   });
-  // A truck carries one or more drivers; the first row starts out primary.
-  const [drivers, setDrivers] = useState([{ ...emptyDriver(), isPrimary: true }]);
 
   useEffect(() => {
     if (!isEditing) return;
@@ -90,54 +77,12 @@ export function AddNewTruck() {
           purchaseVendor: truck.purchase?.vendor || '',
           financedBy: truck.purchase?.financedBy || '',
         });
-
-        // Fall back to the legacy single `driver` for trucks saved before
-        // drivers moved to their own collection and not yet migrated.
-        const existing = truck.drivers?.length
-          ? truck.drivers
-          : truck.driver
-            ? [truck.driver]
-            : [];
-
-        setDrivers(
-          existing.length
-            ? existing.map((d, i) => ({
-                _id: d._id || d.id,
-                name: d.name || '',
-                mobile: d.mobile || '',
-                licenseNumber: d.licenseNumber || '',
-                licenseExpiry: d.licenseExpiry ? d.licenseExpiry.slice(0, 10) : '',
-                salary: d.salary ?? '',
-                isPrimary: d.isPrimary ?? i === 0,
-              }))
-            : [{ ...emptyDriver(), isPrimary: true }]
-        );
       } catch (err) {
         if (!cancelled) setError(err.message || 'Failed to load truck');
       }
     })();
     return () => { cancelled = true; };
   }, [id, isEditing]);
-
-  const handleDriverChange = (index, field, value) => {
-    setDrivers((prev) => prev.map((d, i) => (i === index ? { ...d, [field]: value } : d)));
-  };
-
-  const addDriver = () => setDrivers((prev) => [...prev, emptyDriver()]);
-
-  const removeDriver = (index) => {
-    setDrivers((prev) => {
-      const next = prev.filter((_, i) => i !== index);
-      if (!next.length) return [{ ...emptyDriver(), isPrimary: true }];
-      // Dropping the primary leaves none — promote the first remaining row.
-      if (!next.some((d) => d.isPrimary)) next[0] = { ...next[0], isPrimary: true };
-      return next;
-    });
-  };
-
-  // Primary is exclusive: marking one clears the rest.
-  const setPrimary = (index) =>
-    setDrivers((prev) => prev.map((d, i) => ({ ...d, isPrimary: i === index })));
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -182,15 +127,6 @@ export function AddNewTruck() {
     e.preventDefault();
     setError('');
 
-    // Rows left completely blank are dropped rather than rejected, so an extra
-    // row added by mistake doesn't block the save.
-    const filled = drivers.filter((d) => d.name.trim() || d.mobile.trim());
-    const incomplete = filled.find((d) => !d.name.trim() || !/^\d{10}$/.test(d.mobile.trim()));
-    if (incomplete) {
-      setError('Every driver needs a name and a valid 10-digit mobile number.');
-      return;
-    }
-
     setSubmitting(true);
     try {
       const payload = {
@@ -215,15 +151,6 @@ export function AddNewTruck() {
           vendor: formData.purchaseVendor,
           financedBy: formData.financedBy,
         },
-        drivers: filled.map((d) => ({
-          ...(d._id ? { _id: d._id } : {}),
-          name: d.name.trim(),
-          mobile: d.mobile.trim(),
-          licenseNumber: d.licenseNumber,
-          licenseExpiry: d.licenseExpiry || undefined,
-          salary: d.salary === '' ? undefined : Number(d.salary),
-          isPrimary: Boolean(d.isPrimary),
-        })),
       };
       if (isEditing) {
         await fleet.update(id, payload);
@@ -256,7 +183,7 @@ export function AddNewTruck() {
             <div>
               <h1 className="text-3xl font-bold text-slate-900">{isEditing ? 'Edit Vehicle' : 'Add New Vehicle'}</h1>
               <p className="text-slate-600 mt-1">
-                {isEditing ? 'Update vehicle and driver details' : 'Register a new vehicle and assign a driver'}
+                {isEditing ? 'Update vehicle details' : 'Register a new vehicle'}
               </p>
             </div>
           </div>
@@ -295,124 +222,6 @@ export function AddNewTruck() {
                     className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-              </div>
-            </div>
-
-            {/* Driver Details — a truck can carry several drivers. */}
-            <div className="bg-white rounded-lg border border-slate-200 p-6">
-              <div className="flex items-center justify-between mb-1">
-                <h2 className="text-lg font-semibold text-slate-900">Driver Details</h2>
-                <button
-                  type="button"
-                  onClick={addDriver}
-                  className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add Driver
-                </button>
-              </div>
-              <p className="text-sm text-slate-500 mb-4">
-                Assign one or more drivers to this truck. The primary driver is the one shown on
-                the fleet list and used as the default on trip documents.
-              </p>
-
-              <div className="space-y-4">
-                {drivers.map((driver, index) => (
-                  <div
-                    key={driver._id || index}
-                    className={`rounded-lg border p-4 ${
-                      driver.isPrimary ? 'border-blue-200 bg-blue-50/40' : 'border-slate-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-semibold text-slate-900">
-                          Driver {index + 1}
-                        </span>
-                        {driver.isPrimary && (
-                          <span className="px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded-full">
-                            Primary
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {!driver.isPrimary && (
-                          <button
-                            type="button"
-                            onClick={() => setPrimary(index)}
-                            className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                            title="Make this the primary driver"
-                          >
-                            <Star className="w-3.5 h-3.5" />
-                            Set as primary
-                          </button>
-                        )}
-                        {drivers.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeDriver(index)}
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
-                            title="Remove this driver"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">Driver Name</label>
-                        <input
-                          type="text"
-                          placeholder="e.g., Rajesh Kumar"
-                          value={driver.name}
-                          onChange={(e) => handleDriverChange(index, 'name', e.target.value)}
-                          className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">Mobile Number</label>
-                        <input
-                          type="tel"
-                          placeholder="e.g., 9876543210"
-                          value={driver.mobile}
-                          onChange={(e) => handleDriverChange(index, 'mobile', e.target.value)}
-                          className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">License Number</label>
-                        <input
-                          type="text"
-                          placeholder="e.g., DL-0219950000123"
-                          value={driver.licenseNumber}
-                          onChange={(e) => handleDriverChange(index, 'licenseNumber', e.target.value)}
-                          className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">License Expiry</label>
-                        <input
-                          type="date"
-                          value={driver.licenseExpiry}
-                          onChange={(e) => handleDriverChange(index, 'licenseExpiry', e.target.value)}
-                          className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-2">Monthly Salary (₹)</label>
-                        <input
-                          type="number"
-                          placeholder="0"
-                          value={driver.salary}
-                          onChange={(e) => handleDriverChange(index, 'salary', e.target.value)}
-                          className="w-full px-4 py-2 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
 
