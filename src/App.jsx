@@ -20,6 +20,7 @@ import { AddNewTrip } from './pages/AddNewTrip';
 import { DailyLedger } from './pages/DailyLedger';
 import { AddLedgerEntry } from './pages/AddLedgerEntry';
 import { FleetAndDrivers } from './pages/FleetAndDrivers';
+import { Drivers } from './pages/Drivers';
 import { FleetMap } from './pages/FleetMap';
 import { TripRoutes } from './pages/TripRoutes';
 import { AddNewTruck } from './pages/AddNewTruck';
@@ -112,6 +113,14 @@ function App() {
         element={
           <ProtectedRoute clientOnly resource="trucks">
             <FleetAndDrivers />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/drivers"
+        element={
+          <ProtectedRoute clientOnly resource="drivers">
+            <Drivers />
           </ProtectedRoute>
         }
       />

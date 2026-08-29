@@ -142,14 +142,20 @@ export const fleet = {
 // be reassigned between trucks. Editing a truck's whole roster at once goes
 // through `fleet.update`; these are for one driver at a time.
 export const drivers = {
-  // Optional filters: { truck: '<truckId>' } or { unassigned: true }.
-  list: ({ truck, unassigned } = {}) => {
+  // Optional filters: { truck: '<truckId>' }, { unassigned: true } or
+  // { status: 'On Trip' }.
+  list: ({ truck, unassigned, status } = {}) => {
     const params = new URLSearchParams();
     if (truck) params.set('truck', truck);
     if (unassigned) params.set('unassigned', '1');
+    if (status) params.set('status', status);
     const qs = params.toString();
     return apiCall(`/drivers${qs ? `?${qs}` : ''}`);
   },
+
+  // The roster vocabulary (statuses). constants/driver.js holds a copy for the
+  // first render; this is the authoritative list.
+  options: () => apiCall('/drivers/options'),
 
   create: (payload) =>
     apiCall('/drivers', { method: 'POST', body: JSON.stringify(payload) }),

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin, ShieldCheck, Users } from 'lucide-react';
+import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin, ShieldCheck, Users, UserRound } from 'lucide-react';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -31,11 +31,27 @@ const timeAgo = (iso) => {
 // Driver sees neither the ledger nor the fleet. Items with no `resource` (the
 // dashboard, settings) are shown to everyone. This mirrors the API, which
 // refuses the same calls regardless of what the menu shows.
+//
+// `children` turns an item into a dropdown. Fleet Management splits into
+// Vehicles and Drivers, which are separate masters with separate permission
+// resources — a seat granted only `drivers` sees the parent with just the
+// Drivers entry under it. A parent whose children are all filtered out is
+// dropped entirely, and its own `path` is where clicking the parent lands.
 const CLIENT_NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', match: ['dashboard'] },
   { id: 'trips', label: 'Trips & Documents', icon: FileText, path: '/trips-and-documents', match: ['trips-and-documents', 'add-new-trip'], resource: 'trips' },
   { id: 'ledger', label: 'Daily Ledger', icon: Calendar, path: '/daily-ledger', match: ['daily-ledger', 'add-ledger-entry'], resource: 'ledger' },
-  { id: 'fleet', label: 'Fleet Management', icon: Truck, path: '/fleet-and-drivers', match: ['fleet-and-drivers', 'add-new-truck'], resource: 'trucks' },
+  {
+    id: 'fleet',
+    label: 'Fleet Management',
+    icon: Truck,
+    path: '/fleet-and-drivers',
+    match: ['fleet-and-drivers', 'add-new-truck', 'drivers'],
+    children: [
+      { id: 'fleet-vehicles', label: 'Vehicles', icon: Truck, path: '/fleet-and-drivers', match: ['fleet-and-drivers', 'add-new-truck'], resource: 'trucks' },
+      { id: 'fleet-drivers', label: 'Drivers', icon: UserRound, path: '/drivers', match: ['drivers'], resource: 'drivers' },
+    ],
+  },
   { id: 'triproutes', label: 'Trip Routes', icon: Route, path: '/trip-routes', match: ['trip-routes'], resource: 'tracking' },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings', match: ['settings'] },
 ];
@@ -61,6 +77,8 @@ export function Topbar({ activeMenu, onMenuChange }) {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // Which top-level dropdown is open, by item id. Null when none is.
+  const [openSubmenu, setOpenSubmenu] = useState(null);
   const navigate = useNavigate();
   const { user, logout, isSuperAdmin } = useAuth();
   const { canAccess } = usePermissions();
@@ -120,17 +138,31 @@ export function Topbar({ activeMenu, onMenuChange }) {
     }
   };
 
-  const navItems = (isSuperAdmin ? SUPERADMIN_NAV_ITEMS : CLIENT_NAV_ITEMS).filter(
-    (item) => !item.resource || canAccess(item.resource)
-  );
+  // Hide what the seat cannot reach, at both levels: a child is dropped when its
+  // own resource is ungranted, and a parent is dropped once nothing is left
+  // under it (or its own resource is ungranted).
+  const visible = (item) => !item.resource || canAccess(item.resource);
+  const navItems = (isSuperAdmin ? SUPERADMIN_NAV_ITEMS : CLIENT_NAV_ITEMS)
+    .filter(visible)
+    .map((item) =>
+      item.children ? { ...item, children: item.children.filter(visible) } : item
+    )
+    .filter((item) => !item.children || item.children.length > 0);
   const menuItems = navItems;
 
   // Which item is active: honour an explicit activeMenu prop if given, else infer
   // from the current path via each item's `match` fragments.
   const currentPath = location.pathname;
   const derivedActive =
-    navItems.find((i) => i.match.some((m) => currentPath.includes(m)))?.id || navItems[0].id;
+    navItems.find((i) => i.match.some((m) => currentPath.includes(m)))?.id || navItems[0]?.id;
   const effectiveActive = activeMenu || derivedActive;
+
+  // Longest match wins so /drivers does not also light up under a parent whose
+  // first child happens to match a shorter fragment.
+  const activeChildId = (item) =>
+    item.children
+      ?.filter((c) => c.match.some((m) => currentPath.includes(m)))
+      .sort((a, b) => Math.max(...b.match.map((m) => m.length)) - Math.max(...a.match.map((m) => m.length)))[0]?.id;
 
   const handleLogout = () => {
     logout();
@@ -141,8 +173,11 @@ export function Topbar({ activeMenu, onMenuChange }) {
   // parent passed one, is still notified so layouts that track active state keep
   // working — but routing no longer depends on it.
   const handleMenuClick = (itemId) => {
-    const item = navItems.find((i) => i.id === itemId);
+    const item =
+      navItems.find((i) => i.id === itemId) ||
+      navItems.flatMap((i) => i.children || []).find((c) => c.id === itemId);
     onMenuChange?.(itemId);
+    setOpenSubmenu(null);
     if (item) navigate(item.path);
   };
 
@@ -171,6 +206,64 @@ export function Topbar({ activeMenu, onMenuChange }) {
               {menuItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = effectiveActive === item.id;
+
+                // Parent with children: opens a dropdown on hover (and on click,
+                // so keyboard and touch reach it too) instead of navigating.
+                if (item.children) {
+                  const isOpen = openSubmenu === item.id;
+                  const currentChild = activeChildId(item);
+                  return (
+                    <div
+                      key={item.id}
+                      className="relative"
+                      onMouseEnter={() => setOpenSubmenu(item.id)}
+                      onMouseLeave={() => setOpenSubmenu(null)}
+                    >
+                      <button
+                        onClick={() => setOpenSubmenu(isOpen ? null : item.id)}
+                        aria-expanded={isOpen}
+                        aria-haspopup="true"
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                          isActive
+                            ? 'bg-blue-50 text-blue-600 font-medium'
+                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                        }`}
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span className="text-sm">{item.label}</span>
+                        <ChevronDown
+                          className={`w-3.5 h-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                        />
+                      </button>
+
+                      {isOpen && (
+                        <div className="absolute left-0 top-full w-56 pt-2 z-[2100]">
+                          <div className="bg-white rounded-lg shadow-lg border border-slate-200 py-1">
+                            {item.children.map((child) => {
+                              const ChildIcon = child.icon;
+                              const childActive = currentChild === child.id;
+                              return (
+                                <button
+                                  key={child.id}
+                                  onClick={() => handleMenuClick(child.id)}
+                                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${
+                                    childActive
+                                      ? 'bg-blue-50 text-blue-600 font-medium'
+                                      : 'text-slate-700 hover:bg-slate-50'
+                                  }`}
+                                >
+                                  <ChildIcon className="w-4 h-4" />
+                                  <span className="text-sm">{child.label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
                 return (
                   <button
                     key={item.id}
@@ -339,6 +432,47 @@ export function Topbar({ activeMenu, onMenuChange }) {
               {menuItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = effectiveActive === item.id;
+
+                // No dropdowns on mobile — a parent becomes a section heading
+                // with its children listed under it, so everything stays one tap
+                // away on a screen with room to scroll.
+                if (item.children) {
+                  const currentChild = activeChildId(item);
+                  return (
+                    <div key={item.id} className="py-1">
+                      <div className="flex items-center gap-3 px-4 py-2 text-slate-500">
+                        <Icon className="w-4 h-4" />
+                        <span className="text-xs font-semibold uppercase tracking-wide">
+                          {item.label}
+                        </span>
+                      </div>
+                      <div className="pl-4 space-y-1">
+                        {item.children.map((child) => {
+                          const ChildIcon = child.icon;
+                          const childActive = currentChild === child.id;
+                          return (
+                            <button
+                              key={child.id}
+                              onClick={() => {
+                                handleMenuClick(child.id);
+                                setIsMenuOpen(false);
+                              }}
+                              className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-colors ${
+                                childActive
+                                  ? 'bg-blue-600 text-white'
+                                  : 'text-slate-700 hover:bg-slate-200'
+                              }`}
+                            >
+                              <ChildIcon className="w-4 h-4" />
+                              <span className="text-sm font-medium">{child.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
                   <button
                     key={item.id}
