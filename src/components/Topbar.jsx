@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin, ShieldCheck, Users, UserRound, Cpu } from 'lucide-react';
+import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin, ShieldCheck, Users, UserRound, Cpu, History } from 'lucide-react';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -79,6 +79,7 @@ const SUPERADMIN_NAV_ITEMS = [
   },
   { id: 'admin-tracking', label: 'Live Tracking', icon: MapPin, path: '/admin/live-tracking', match: ['admin/live-tracking'] },
   { id: 'admin-permissions', label: 'Permissions', icon: ShieldCheck, path: '/admin/permissions', match: ['admin/permissions'] },
+  { id: 'admin-audit', label: 'Audit Log', icon: History, path: '/admin/audit', match: ['admin/audit'] },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings', match: ['settings'] },
 ];
 

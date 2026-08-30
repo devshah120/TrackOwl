@@ -32,6 +32,18 @@ export const apiCall = async (endpoint, options = {}) => {
   return data;
 };
 
+// Builds a query string from a filter object, dropping empty values so a
+// cleared filter leaves the URL rather than sending `entity=`.
+const toQuery = (params = {}) => {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    search.set(key, value);
+  });
+  const qs = search.toString();
+  return qs ? `?${qs}` : '';
+};
+
 export const auth = {
   register: (payload) =>
     apiCall('/auth/register', {
@@ -412,6 +424,54 @@ export const geo = {
 
 // Superadmin — platform-wide views across every client. All calls 403 for a
 // regular client; the frontend also hides these routes/pages from them.
+// The audit trail — who changed what, from what to what, and when.
+//
+// Read-only by design: entries are written server-side as a side effect of the
+// change they describe, so there is nothing here to create, edit or delete.
+export const audit = {
+  // Filters are passed through as-is; anything the server does not recognise is
+  // ignored there rather than erroring, so a stale saved filter still loads.
+  // Accepts { entity, action, actor, search, from, to, page, limit }.
+  list: (filters = {}) => apiCall(`/audit${toQuery(filters)}`),
+
+  // The vocabularies the filter bar is built from, including the people who
+  // actually appear in this account's trail.
+  options: () => apiCall('/audit/options'),
+
+  // Headline counts for the strip above the table.
+  stats: () => apiCall('/audit/stats'),
+
+  // Everything that has happened to one record — the History panel on a truck
+  // or a trip.
+  forRecord: (entity, id) => apiCall(`/audit/entity/${entity}/${id}`),
+
+  // Downloads the current view as CSV.
+  //
+  // Not an apiCall: that parses every response as JSON, and this one is a file.
+  // The token cannot ride in a header on a plain navigation, so the response is
+  // fetched with auth and handed to the browser as a blob instead.
+  exportCsv: async (filters = {}) => {
+    const response = await fetch(`${API_BASE_URL}/audit/export${toQuery(filters)}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}` },
+    });
+    if (!response.ok) {
+      throw { status: response.status, message: 'Failed to export the audit log' };
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    // Released on the next tick — revoking it synchronously can cancel the
+    // download in Safari before it has started reading the blob.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
+};
+
 export const admin = {
   listUsers: () => apiCall('/admin/users'),
 
@@ -476,6 +536,12 @@ export const admin = {
 
   resetPermissions: (role) =>
     apiCall(`/admin/permissions/${role}/reset`, { method: 'POST' }),
+
+  // The platform-wide audit trail — every client's activity, plus the entries
+  // that belong to no account at all (a failed sign-in against an unknown
+  // email, a role-matrix edit, a deleted client). Same filters as audit.list,
+  // plus `account` to narrow to one client.
+  auditLog: (filters = {}) => apiCall(`/admin/audit${toQuery(filters)}`),
 };
 
 // Public (no auth): the trip behind a share token, for the client map page.

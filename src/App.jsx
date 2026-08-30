@@ -34,6 +34,7 @@ import { AdminDeviceMaster } from './pages/admin/AdminDeviceMaster';
 import { AdminAddDevice } from './pages/admin/AdminAddDevice';
 import { AdminLiveTracking } from './pages/admin/AdminLiveTracking';
 import { AdminPermissions } from './pages/admin/AdminPermissions';
+import { AdminAuditLog } from './pages/admin/AdminAuditLog';
 
 function App() {
   const navigate = useNavigate();
@@ -244,6 +245,14 @@ function App() {
         element={
           <ProtectedRoute requireSuperAdmin>
             <AdminPermissions />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/audit"
+        element={
+          <ProtectedRoute requireSuperAdmin>
+            <AdminAuditLog />
           </ProtectedRoute>
         }
       />

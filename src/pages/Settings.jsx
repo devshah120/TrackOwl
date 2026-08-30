@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Plus, Search, Edit2, Trash2, Filter, ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell, Download, Upload, AlertCircle, Save, User, Building, CreditCard, PenTool, Trash } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Filter, ChevronDown, LayoutDashboard, Calendar, Truck, Settings, LogOut, Menu, X, Bell, Download, Upload, AlertCircle, Save, User, Building, CreditCard, PenTool, Trash, History } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
@@ -7,6 +7,7 @@ import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { Topbar } from '../components/Topbar';
 import { SignaturePad } from '../components/SignaturePad';
 import { UserManagement } from '../components/UserManagement';
+import { AuditLog } from '../components/AuditLog';
 import { user as userApi, companies as companiesApi } from '../services/api';
 
 // Uploaded signatures and logos are downscaled in the browser before they are
@@ -64,7 +65,16 @@ export function SettingsPage() {
   // tabs (that is `company:read`) but gets no Save button and no add/remove
   // controls, rather than a 403 banner after filling the form in.
   const canEditCompany = can('company', 'update');
-  const [activeTab, setActiveTab] = useState(canSeeCompany ? 'company' : 'users');
+  // The audit trail is gated on `reports:read` — the grant that already means
+  // "may see account-wide summaries". A Driver holds none of it, which is right:
+  // the log names every colleague's activity, not just their own.
+  const canSeeAudit = can('reports', 'read');
+  // Land on the first tab this seat can actually open. Falling back to 'users'
+  // unconditionally would show a blank panel to a seat holding reports:read but
+  // not users:read — a combination the permission matrix allows.
+  const [activeTab, setActiveTab] = useState(
+    canSeeCompany ? 'company' : canSeeUsers ? 'users' : canSeeAudit ? 'audit' : 'company'
+  );
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -549,6 +559,19 @@ export function SettingsPage() {
               >
                 <User className="w-4 h-4" />
                 User Management
+              </button>
+            )}
+            {canSeeAudit && (
+              <button
+                onClick={() => setActiveTab('audit')}
+                className={`px-4 py-3 font-medium transition-colors whitespace-nowrap flex items-center gap-2 ${
+                  activeTab === 'audit'
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <History className="w-4 h-4" />
+                Audit Log
               </button>
             )}
             {/* <button
@@ -1186,6 +1209,10 @@ export function SettingsPage() {
           {/* User Management Tab — the account's team roster. Only shown to
               seats holding users:read, which excludes a Driver. */}
           {activeTab === 'users' && canSeeUsers && <UserManagement />}
+
+          {/* Audit Log Tab — the account's change history. Read-only, and gated
+              on reports:read for the same reason the tab is. */}
+          {activeTab === 'audit' && canSeeAudit && <AuditLog />}
 
           {/* Backup & Restore Tab - Commented Out */}
         </div>
