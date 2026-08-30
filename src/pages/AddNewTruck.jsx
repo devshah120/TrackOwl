@@ -1,16 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ChevronDown, LogOut, Menu, X, Bell, ArrowLeft } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LayoutDashboard, FileText, Calendar, Truck, Settings } from 'lucide-react';
 import { Topbar } from '../components/Topbar';
-import { fleet } from '../services/api';
+import { DocumentsSection } from '../components/DocumentsSection';
+import { usePermissions } from '../hooks/usePermissions';
+import { fleet, vehicleDocuments } from '../services/api';
 import {
   VEHICLE_TYPES,
   FUEL_TYPES,
   BODY_TYPES,
   VEHICLE_STATUSES,
 } from '../constants/vehicle';
+import { VEHICLE_DOCUMENT_TYPES, VEHICLE_DOCUMENT_LABELS } from '../constants/documents';
 
 // Every field in this form wears the same box; naming it keeps the markup
 // readable now that there are four sections of them.
@@ -22,10 +25,15 @@ export function AddNewTruck() {
   const { id } = useParams();
   const isEditing = Boolean(id);
   const { user, logout } = useAuth();
+  const { can } = usePermissions();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  // Documents captured on a *new* vehicle have nowhere to be filed until the
+  // truck exists, so the section buffers them and this ref flushes them once
+  // the create call returns an id.
+  const documentsRef = useRef(null);
   // Flat form state: the nested capacity/purchase shape the API expects is
   // assembled at submit time, which keeps every input a plain controlled field.
   const [formData, setFormData] = useState({
@@ -153,9 +161,24 @@ export function AddNewTruck() {
         },
       };
       if (isEditing) {
+        // Documents on an existing truck are written straight through by the
+        // section itself, so there is nothing to flush here.
         await fleet.update(id, payload);
       } else {
-        await fleet.create(payload);
+        const res = await fleet.create(payload);
+        const newId = res.truck?._id || res.truck?.id;
+        // The truck is saved either way; only the paperwork can fail here, so
+        // it is reported without losing the vehicle the operator just created.
+        try {
+          await documentsRef.current?.flush(newId);
+        } catch (docErr) {
+          setError(
+            `Vehicle saved, but a document could not be attached: ${docErr.message || 'unknown error'}. ` +
+            'Open the vehicle again to re-add it.'
+          );
+          setSubmitting(false);
+          return;
+        }
       }
       navigate('/fleet-and-drivers');
     } catch (err) {
@@ -430,6 +453,20 @@ export function AddNewTruck() {
                 </div>
               </div>
             </div>
+
+            {/* Vehicle Documents — RC, insurance, PUC, fitness, permit and road
+                tax, each with its own number, dates and scanned copy. */}
+            <DocumentsSection
+              ref={documentsRef}
+              ownerId={isEditing ? id : null}
+              api={vehicleDocuments}
+              ownerKey="truck"
+              types={VEHICLE_DOCUMENT_TYPES}
+              labels={VEHICLE_DOCUMENT_LABELS}
+              canEdit={can('trucks', isEditing ? 'update' : 'create')}
+              title="Vehicle Documents"
+              description="RC, insurance, PUC, fitness, permit and road tax. Anything with an expiry date is chased in the notification bell."
+            />
 
             {/* Form Actions */}
             <div className="flex gap-3">

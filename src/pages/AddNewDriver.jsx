@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Topbar } from '../components/Topbar';
+import { DocumentsSection } from '../components/DocumentsSection';
 import { usePermissions } from '../hooks/usePermissions';
-import { drivers as driversApi, fleet } from '../services/api';
+import { drivers as driversApi, driverDocuments, fleet } from '../services/api';
 import { DRIVER_STATUSES, toDateInput } from '../constants/driver';
+import { DRIVER_DOCUMENT_TYPES, DRIVER_DOCUMENT_LABELS } from '../constants/documents';
 
 // Every field in this form wears the same box, matching AddNewTruck.
 const inputClass =
@@ -42,6 +44,11 @@ export function AddNewDriver() {
   const [loading, setLoading] = useState(isEditing);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  // Documents captured on a *new* driver have nowhere to be filed until the
+  // driver exists, so the section buffers them and this ref flushes them once
+  // the create call returns an id.
+  const documentsRef = useRef(null);
 
   // The truck list only feeds the assignment dropdown, so a seat without
   // `trucks` access still gets a working form instead of a dead page.
@@ -136,9 +143,24 @@ export function AddNewDriver() {
       };
 
       if (isEditing) {
+        // Documents on an existing driver are written straight through by the
+        // section itself, so there is nothing to flush here.
         await driversApi.update(id, payload);
       } else {
-        await driversApi.create(payload);
+        const res = await driversApi.create(payload);
+        const newId = res.driver?._id || res.driver?.id;
+        // The driver is saved either way; only the paperwork can fail here, so
+        // it is reported without losing the driver the operator just created.
+        try {
+          await documentsRef.current?.flush(newId);
+        } catch (docErr) {
+          setError(
+            `Driver saved, but a document could not be attached: ${docErr.message || 'unknown error'}. ` +
+            'Open the driver again to re-add it.'
+          );
+          setSubmitting(false);
+          return;
+        }
       }
       navigate('/drivers');
     } catch (err) {
@@ -347,6 +369,20 @@ export function AddNewDriver() {
                   </div>
                 </div>
               </div>
+
+              {/* Driver Documents — licence, identity proof, training and
+                  medical certificates, each with its own expiry. */}
+              <DocumentsSection
+                ref={documentsRef}
+                ownerId={isEditing ? id : null}
+                api={driverDocuments}
+                ownerKey="driver"
+                types={DRIVER_DOCUMENT_TYPES}
+                labels={DRIVER_DOCUMENT_LABELS}
+                canEdit={can('drivers', isEditing ? 'update' : 'create')}
+                title="Driver Documents"
+                description="Licence, identity proof, training and medical certificates. Anything with an expiry date is chased in the notification bell."
+              />
 
               {/* Actions */}
               <div className="flex justify-end gap-3">

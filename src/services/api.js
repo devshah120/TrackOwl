@@ -166,6 +166,69 @@ export const drivers = {
   remove: (id) => apiCall(`/drivers/${id}`, { method: 'DELETE' }),
 };
 
+// Vehicle Documents — the statutory paperwork for one truck (RC, insurance,
+// PUC, fitness, permit, road tax), each with its own number, issue/expiry dates
+// and an optional scanned copy.
+//
+// Like the ledger's receipts, list responses omit the file itself:
+// `hasAttachment` tells you one exists, and getAttachment(id) fetches it when
+// the user actually opens it. Every document also comes back with an
+// `expiryState` of 'expired' | 'expiring' | 'valid' | 'none'.
+export const vehicleDocuments = {
+  // Filters: { truck: '<truckId>' }, { docType: 'PUC' },
+  // { state: 'expired' | 'expiring' | 'valid' }.
+  list: ({ truck, docType, state } = {}) => {
+    const params = new URLSearchParams();
+    if (truck) params.set('truck', truck);
+    if (docType) params.set('docType', docType);
+    if (state && state !== 'all') params.set('state', state);
+    const qs = params.toString();
+    return apiCall(`/vehicle-documents${qs ? `?${qs}` : ''}`);
+  },
+
+  // The paperwork vocabulary (types and their labels). constants/documents.js
+  // holds a copy for the first render; this is the authoritative list.
+  options: () => apiCall('/vehicle-documents/options'),
+
+  create: (payload) =>
+    apiCall('/vehicle-documents', { method: 'POST', body: JSON.stringify(payload) }),
+
+  update: (id, payload) =>
+    apiCall(`/vehicle-documents/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  remove: (id) => apiCall(`/vehicle-documents/${id}`, { method: 'DELETE' }),
+
+  // The stored scan as { dataUrl, filename, mimeType, uploadedAt }.
+  getAttachment: (id) => apiCall(`/vehicle-documents/${id}/attachment`),
+};
+
+// Driver Documents — the same, for a driver: licence, identity proof, training
+// endorsements, medical and police verification.
+export const driverDocuments = {
+  // Filters: { driver: '<driverId>' }, { docType: 'Licence' },
+  // { state: 'expired' | 'expiring' | 'valid' }.
+  list: ({ driver, docType, state } = {}) => {
+    const params = new URLSearchParams();
+    if (driver) params.set('driver', driver);
+    if (docType) params.set('docType', docType);
+    if (state && state !== 'all') params.set('state', state);
+    const qs = params.toString();
+    return apiCall(`/driver-documents${qs ? `?${qs}` : ''}`);
+  },
+
+  options: () => apiCall('/driver-documents/options'),
+
+  create: (payload) =>
+    apiCall('/driver-documents', { method: 'POST', body: JSON.stringify(payload) }),
+
+  update: (id, payload) =>
+    apiCall(`/driver-documents/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  remove: (id) => apiCall(`/driver-documents/${id}`, { method: 'DELETE' }),
+
+  getAttachment: (id) => apiCall(`/driver-documents/${id}/attachment`),
+};
+
 // Daily Ledger — income/expense entries, each optionally tied to a truck and
 // driver and backed by a scanned receipt.
 export const ledger = {
