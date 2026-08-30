@@ -31,6 +31,7 @@ import { AdminOverview } from './pages/admin/AdminOverview';
 import { AdminClients } from './pages/admin/AdminClients';
 import { AdminFleet } from './pages/admin/AdminFleet';
 import { AdminDeviceMaster } from './pages/admin/AdminDeviceMaster';
+import { AdminAddDevice } from './pages/admin/AdminAddDevice';
 import { AdminLiveTracking } from './pages/admin/AdminLiveTracking';
 import { AdminPermissions } from './pages/admin/AdminPermissions';
 
@@ -211,6 +212,22 @@ function App() {
         element={
           <ProtectedRoute requireSuperAdmin>
             <AdminDeviceMaster />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/add-device"
+        element={
+          <ProtectedRoute requireSuperAdmin>
+            <AdminAddDevice />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/add-device/:id"
+        element={
+          <ProtectedRoute requireSuperAdmin>
+            <AdminAddDevice />
           </ProtectedRoute>
         }
       />
