@@ -129,6 +129,12 @@ export const trips = {
 export const fleet = {
   list: () => apiCall('/trucks'),
 
+  // The dashboard's headline numbers — total vehicles, online/offline,
+  // active trips, vehicles in maintenance and open alerts — counted on the
+  // server so the browser doesn't need the tracking and trips grants (nor four
+  // round trips) just to render the strip.
+  summary: () => apiCall('/trucks/fleet-summary'),
+
   create: (payload) =>
     apiCall('/trucks', { method: 'POST', body: JSON.stringify(payload) }),
 

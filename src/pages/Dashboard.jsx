@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, Truck, AlertCircle, Check } from 'lucide-react';
 import { FleetMapWidget } from '../components/FleetMapWidget';
+import { FleetDashboard } from '../components/FleetDashboard';
 import { fleet, ledger, billing, tracking } from '../services/api';
 import {
   ACTIVE_STATUSES,
@@ -199,6 +200,14 @@ export function Dashboard() {
 
       {!loading && (
       <>
+      {/* Fleet Dashboard — live vehicle counts, alongside the financial stats
+          below. Fetches and polls on its own so the map and the money figures
+          are not held up waiting on it. */}
+      <div>
+        <h2 className="text-xl font-bold text-slate-900 mb-4">Fleet Dashboard</h2>
+        <FleetDashboard />
+      </div>
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat) => {
