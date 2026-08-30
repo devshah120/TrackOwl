@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Smartphone, RadioTower, Copy, Check, Loader2, AlertCircle } from 'lucide-react';
+import { X, Smartphone, RadioTower, Copy, Check, Loader2, AlertCircle, Cpu, Plus } from 'lucide-react';
 import { admin } from '../services/api';
 
 // Same two-step device registration as AddDeviceModal, but for superadmin:
@@ -8,9 +8,19 @@ import { admin } from '../services/api';
 // client). The vehicle "name" is one of that client's existing trucks (added
 // on Fleet Oversight) rather than free text, so the tracking device always
 // lines up with a real truck number instead of drifting from it.
-export function AdminAddDeviceModal({ clients, trucks, onClose, onRegistered }) {
+//
+// Two ways in, because a unit usually reaches the platform before it reaches a
+// truck: it is added to the Device Master when it is bought, then fitted later.
+//   'existing' — pick a spare from the master and fit it. No gateway round-trip
+//                and no setup panel: the unit is already registered, so this
+//                only records which truck it now sits in.
+//   'new'      — register a unit that is not in the master yet, exactly as
+//                before, ending on the configure-the-device panel.
+export function AdminAddDeviceModal({ clients, trucks, devices = [], onClose, onRegistered }) {
+  const [mode, setMode] = useState('existing');
   const [owner, setOwner] = useState('');
   const [truckId, setTruckId] = useState('');
+  const [deviceId, setDeviceId] = useState('');
   const [type, setType] = useState('phone');
   const [customId, setCustomId] = useState('');
   const [busy, setBusy] = useState(false);
@@ -21,12 +31,28 @@ export function AdminAddDeviceModal({ clients, trucks, onClose, onRegistered }) 
   const ownerTrucks = trucks.filter((t) => (t.owner?._id || t.owner) === owner);
   const selectedTruck = ownerTrucks.find((t) => (t._id || t.id) === truckId);
 
+  // Spares: this client's devices that are not fitted to a truck yet. A device
+  // already on a truck is left out — moving one between trucks is a Device
+  // Master edit, not something to do by accident from the map screen.
+  const spareDevices = devices.filter(
+    (d) => (d.owner?._id || d.owner) === owner && !d.vehicle
+  );
+
+  const isExisting = mode === 'existing';
   const isHardware = type === 'hardware';
-  const canSubmit = owner && truckId && (!isHardware || customId.trim()) && !busy;
+  const canSubmit =
+    owner && truckId && !busy && (isExisting ? Boolean(deviceId) : !isHardware || customId.trim());
 
   const changeOwner = (value) => {
     setOwner(value);
-    setTruckId(''); // the previous truck belongs to a different client
+    // Both belong to the previously chosen client.
+    setTruckId('');
+    setDeviceId('');
+  };
+
+  const changeMode = (value) => {
+    setMode(value);
+    setError(null);
   };
 
   const submit = async (e) => {
@@ -36,11 +62,19 @@ export function AdminAddDeviceModal({ clients, trucks, onClose, onRegistered }) 
     setBusy(true);
     setError(null);
     try {
-      const res = await admin.createDevice(owner, selectedTruck.number, customId.trim() || undefined, type);
-      setSetup(res.setup);
-      onRegistered?.(res.device);
+      if (isExisting) {
+        // Already registered in the gateway — this only records the fitment,
+        // so there is no setup block to show and the modal can just close.
+        const res = await admin.updateDevice(deviceId, { vehicle: truckId });
+        onRegistered?.(res.device);
+        onClose();
+      } else {
+        const res = await admin.createDevice(owner, selectedTruck.number, customId.trim() || undefined, type);
+        setSetup(res.setup);
+        onRegistered?.(res.device);
+      }
     } catch (err) {
-      setError(err.message || 'Could not register the vehicle');
+      setError(err.message || 'Could not add the vehicle');
     } finally {
       setBusy(false);
     }
@@ -78,6 +112,27 @@ export function AdminAddDeviceModal({ clients, trucks, onClose, onRegistered }) 
 
         {!setup && (
           <form onSubmit={submit} className="space-y-4 p-4">
+            <div className="grid grid-cols-2 gap-2 rounded-lg bg-slate-100 p-1">
+              {[
+                ['existing', Cpu, 'Existing device'],
+                ['new', Plus, 'Register new'],
+              ].map(([value, Icon, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => changeMode(value)}
+                  className={`flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition ${
+                    mode === value
+                      ? 'bg-white text-slate-900 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </button>
+              ))}
+            </div>
+
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">
                 Client (owner)
@@ -96,37 +151,39 @@ export function AdminAddDeviceModal({ clients, trucks, onClose, onRegistered }) 
               </select>
             </div>
 
-            <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">
-                Tracking device
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setType('phone')}
-                  className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${
-                    !isHardware
-                      ? 'border-sky-500 bg-sky-50 text-sky-700'
-                      : 'border-slate-300 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <Smartphone className="h-4 w-4" />
-                  Phone app
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setType('hardware')}
-                  className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${
-                    isHardware
-                      ? 'border-sky-500 bg-sky-50 text-sky-700'
-                      : 'border-slate-300 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  <RadioTower className="h-4 w-4" />
-                  GPS device
-                </button>
+            {!isExisting && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Tracking device
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setType('phone')}
+                    className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                      !isHardware
+                        ? 'border-sky-500 bg-sky-50 text-sky-700'
+                        : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <Smartphone className="h-4 w-4" />
+                    Phone app
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setType('hardware')}
+                    className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition ${
+                      isHardware
+                        ? 'border-sky-500 bg-sky-50 text-sky-700'
+                        : 'border-slate-300 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <RadioTower className="h-4 w-4" />
+                    GPS device
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             <div>
               <label className="mb-1 block text-sm font-medium text-slate-700">
@@ -154,7 +211,41 @@ export function AdminAddDeviceModal({ clients, trucks, onClose, onRegistered }) 
               )}
             </div>
 
-            {isHardware ? (
+            {isExisting && (
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">
+                  Device
+                </label>
+                <select
+                  value={deviceId}
+                  onChange={(e) => setDeviceId(e.target.value)}
+                  disabled={!owner}
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 disabled:bg-slate-50 disabled:text-slate-400"
+                >
+                  <option value="">
+                    {owner ? 'Select a device...' : 'Pick a client first'}
+                  </option>
+                  {spareDevices.map((d) => {
+                    const id = d._id || d.id;
+                    return (
+                      <option key={id} value={id}>
+                        {d.name}
+                        {d.imei || d.uniqueId ? ` — ${d.imei || d.uniqueId}` : ''}
+                        {d.model ? ` (${d.model})` : ''}
+                      </option>
+                    );
+                  })}
+                </select>
+                {owner && spareDevices.length === 0 && (
+                  <p className="mt-1 text-xs text-amber-600">
+                    No spare devices for this client — every one is already fitted to a truck.
+                    Register a new one, or add it on Device Master first.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {!isExisting && (isHardware ? (
               <div>
                 <label className="mb-1 block text-sm font-medium text-slate-700">
                   IMEI
@@ -186,7 +277,7 @@ export function AdminAddDeviceModal({ clients, trucks, onClose, onRegistered }) 
                   This is typed into the phone app. Use the number plate if you like — it must be unique.
                 </p>
               </div>
-            )}
+            ))}
 
             {error && (
               <div className="flex gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
@@ -202,8 +293,11 @@ export function AdminAddDeviceModal({ clients, trucks, onClose, onRegistered }) 
             >
               {busy
                 ? <Loader2 className="h-4 w-4 animate-spin" />
+                : isExisting ? <Cpu className="h-4 w-4" />
                 : isHardware ? <RadioTower className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
-              {busy ? 'Registering…' : 'Register vehicle'}
+              {busy
+                ? (isExisting ? 'Fitting…' : 'Registering…')
+                : (isExisting ? 'Fit to truck' : 'Register vehicle')}
             </button>
           </form>
         )}

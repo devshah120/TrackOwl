@@ -30,6 +30,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { AdminOverview } from './pages/admin/AdminOverview';
 import { AdminClients } from './pages/admin/AdminClients';
 import { AdminFleet } from './pages/admin/AdminFleet';
+import { AdminDeviceMaster } from './pages/admin/AdminDeviceMaster';
 import { AdminLiveTracking } from './pages/admin/AdminLiveTracking';
 import { AdminPermissions } from './pages/admin/AdminPermissions';
 
@@ -202,6 +203,14 @@ function App() {
         element={
           <ProtectedRoute requireSuperAdmin>
             <AdminFleet />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/devices"
+        element={
+          <ProtectedRoute requireSuperAdmin>
+            <AdminDeviceMaster />
           </ProtectedRoute>
         }
       />

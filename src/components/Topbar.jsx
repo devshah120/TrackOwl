@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin, ShieldCheck, Users, UserRound } from 'lucide-react';
+import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin, ShieldCheck, Users, UserRound, Cpu } from 'lucide-react';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -37,6 +37,10 @@ const timeAgo = (iso) => {
 // resources — a seat granted only `drivers` sees the parent with just the
 // Drivers entry under it. A parent whose children are all filtered out is
 // dropped entirely, and its own `path` is where clicking the parent lands.
+//
+// The superadmin's Fleet Oversight splits the same way, into the vehicles it
+// oversees and the Device Master — the tracking hardware fitted to them. Both
+// are superadmin-only pages, so neither child carries a `resource`.
 const CLIENT_NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', match: ['dashboard'] },
   { id: 'trips', label: 'Trips & Documents', icon: FileText, path: '/trips-and-documents', match: ['trips-and-documents', 'add-new-trip'], resource: 'trips' },
@@ -62,7 +66,17 @@ const CLIENT_NAV_ITEMS = [
 const SUPERADMIN_NAV_ITEMS = [
   { id: 'admin-overview', label: 'Overview', icon: LayoutDashboard, path: '/admin/overview', match: ['admin/overview'] },
   { id: 'admin-clients', label: 'Clients', icon: Users, path: '/admin/clients', match: ['admin/clients'] },
-  { id: 'admin-fleet', label: 'Fleet Oversight', icon: Truck, path: '/admin/fleet', match: ['admin/fleet'] },
+  {
+    id: 'admin-fleet',
+    label: 'Fleet Oversight',
+    icon: Truck,
+    path: '/admin/fleet',
+    match: ['admin/fleet', 'admin/devices'],
+    children: [
+      { id: 'admin-fleet-vehicles', label: 'Vehicles', icon: Truck, path: '/admin/fleet', match: ['admin/fleet'] },
+      { id: 'admin-fleet-devices', label: 'Device Master', icon: Cpu, path: '/admin/devices', match: ['admin/devices'] },
+    ],
+  },
   { id: 'admin-tracking', label: 'Live Tracking', icon: MapPin, path: '/admin/live-tracking', match: ['admin/live-tracking'] },
   { id: 'admin-permissions', label: 'Permissions', icon: ShieldCheck, path: '/admin/permissions', match: ['admin/permissions'] },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings', match: ['settings'] },

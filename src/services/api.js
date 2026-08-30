@@ -369,13 +369,26 @@ export const admin = {
 
   listDevices: () => apiCall('/admin/devices'),
 
+  // The device master's vocabularies (unit types, lifecycle statuses), served
+  // from the same lists the model validates against.
+  deviceOptions: () => apiCall('/admin/devices/options'),
+
   // Registers a vehicle in the Traccar gateway and assigns it to `owner` (a
   // client id) in one call — the admin equivalent of tracking.registerDevice.
-  createDevice: (owner, name, uniqueId, type = 'phone') =>
+  // `master` carries the optional device-master fields (model, SIM, firmware,
+  // install date, fitted vehicle); the Live Tracking quick-add omits it.
+  createDevice: (owner, name, uniqueId, type = 'phone', master = {}) =>
     apiCall('/admin/devices', {
       method: 'POST',
-      body: JSON.stringify({ owner, name, type, ...(uniqueId ? { uniqueId } : {}) }),
+      body: JSON.stringify({ owner, name, type, ...(uniqueId ? { uniqueId } : {}), ...master }),
     }),
+
+  // Edits one device's master record. The gateway identity (uniqueId) is fixed
+  // and is not part of the payload.
+  updateDevice: (id, payload) =>
+    apiCall(`/admin/devices/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  removeDevice: (id) => apiCall(`/admin/devices/${id}`, { method: 'DELETE' }),
 
   getStats: () => apiCall('/admin/stats'),
 

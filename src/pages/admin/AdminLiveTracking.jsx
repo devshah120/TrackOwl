@@ -177,6 +177,7 @@ export function AdminLiveTracking() {
           <AdminAddDeviceModal
             clients={clients}
             trucks={trucks}
+            devices={devices}
             onClose={() => setAdding(false)}
             onRegistered={load}
           />
