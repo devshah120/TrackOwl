@@ -24,7 +24,10 @@ const timeAgo = (iso) => {
 //
 // `path` is the real standalone route each item opens. `match` lists the URL
 // fragments that should light the item as active (a page and its sub-pages, e.g.
-// the ledger and its add-entry screen).
+// the ledger and its add-entry screen). A fragment is matched as a substring;
+// ending one with '$' anchors it to the end of the path instead, which is how
+// sections whose URLs share a prefix (/trips vs /trips-and-documents) stay
+// distinct.
 //
 // `resource` is the permission resource the page needs. An item is hidden from
 // any seat holding no grant on it — an Accountant does not see Trip Routes, a
@@ -43,22 +46,25 @@ const timeAgo = (iso) => {
 // are superadmin-only pages, so neither child carries a `resource`.
 const CLIENT_NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', match: ['dashboard'] },
-  // Trip Management: the operational trip, plus the customer master trips are
-  // booked against. Kept separate from "Trips & Documents" below, which is the
-  // LR/invoice paperwork side and has always been its own screen.
+  // Trip Management: the operational trip, the customer master trips are booked
+  // against, and the route map. Kept separate from "Trips & Documents" below,
+  // which is the LR/invoice paperwork side and has always been its own screen.
   //
-  // The match fragments are deliberately specific ('/trips' with its leading
-  // slash, not 'trips'), because matching is a substring test and a bare
-  // 'trips' would also light this up on /trips-and-documents.
+  // Matching is a plain substring test over the URL, and these paths overlap:
+  // '/trips' is a prefix of '/trips-and-documents', and '/trip-routes' shares
+  // its stem with both. So the fragments here are anchored with a trailing
+  // delimiter — '/trips/' and an exact '/trips' handled by the $ marker below —
+  // rather than left as bare prefixes that would swallow a sibling's URL.
   {
     id: 'tripmgmt',
     label: 'Trip Management',
     icon: ClipboardList,
     path: '/trips',
-    match: ['/trips', '/customers'],
+    match: ['/trips$', '/trips/', '/customers', '/trip-routes'],
     children: [
-      { id: 'tripmgmt-trips', label: 'Trips', icon: ClipboardList, path: '/trips', match: ['/trips'], resource: 'trips' },
+      { id: 'tripmgmt-trips', label: 'Trips', icon: ClipboardList, path: '/trips', match: ['/trips$', '/trips/'], resource: 'trips' },
       { id: 'tripmgmt-customers', label: 'Customers', icon: Building2, path: '/customers', match: ['/customers'], resource: 'customers' },
+      { id: 'tripmgmt-routes', label: 'Trip Routes', icon: Route, path: '/trip-routes', match: ['/trip-routes'], resource: 'tracking' },
     ],
   },
   { id: 'trips', label: 'Trips & Documents', icon: FileText, path: '/trips-and-documents', match: ['trips-and-documents', 'add-new-trip'], resource: 'billing' },
@@ -74,7 +80,6 @@ const CLIENT_NAV_ITEMS = [
       { id: 'fleet-drivers', label: 'Drivers', icon: UserRound, path: '/drivers', match: ['drivers', 'add-new-driver'], resource: 'drivers' },
     ],
   },
-  { id: 'triproutes', label: 'Trip Routes', icon: Route, path: '/trip-routes', match: ['trip-routes'], resource: 'tracking' },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings', match: ['settings'] },
 ];
 
@@ -186,15 +191,25 @@ export function Topbar({ activeMenu, onMenuChange }) {
   // Which item is active: honour an explicit activeMenu prop if given, else infer
   // from the current path via each item's `match` fragments.
   const currentPath = location.pathname;
+
+  // A fragment is a substring test, except that a trailing '$' anchors it to the
+  // end of the path. That anchor is what keeps sibling sections apart when one
+  // path is a prefix of another: '/trips$' matches /trips exactly and leaves
+  // /trips-and-documents to its own item, which a bare '/trips' would swallow.
+  const pathMatches = (fragment) =>
+    fragment.endsWith('$')
+      ? currentPath === fragment.slice(0, -1)
+      : currentPath.includes(fragment);
+
   const derivedActive =
-    navItems.find((i) => i.match.some((m) => currentPath.includes(m)))?.id || navItems[0]?.id;
+    navItems.find((i) => i.match.some(pathMatches))?.id || navItems[0]?.id;
   const effectiveActive = activeMenu || derivedActive;
 
   // Longest match wins so /drivers does not also light up under a parent whose
   // first child happens to match a shorter fragment.
   const activeChildId = (item) =>
     item.children
-      ?.filter((c) => c.match.some((m) => currentPath.includes(m)))
+      ?.filter((c) => c.match.some(pathMatches))
       .sort((a, b) => Math.max(...b.match.map((m) => m.length)) - Math.max(...a.match.map((m) => m.length)))[0]?.id;
 
   const handleLogout = () => {
