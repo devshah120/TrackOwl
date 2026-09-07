@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin, ShieldCheck, Users, UserRound, Cpu, History, ClipboardList, Building2 } from 'lucide-react';
+import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin, ShieldCheck, Users, UserRound, Cpu, History, ClipboardList, Building2, Fuel } from 'lucide-react';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -74,10 +74,13 @@ const CLIENT_NAV_ITEMS = [
     label: 'Fleet Management',
     icon: Truck,
     path: '/fleet-and-drivers',
-    match: ['fleet-and-drivers', 'add-new-truck', 'drivers', 'add-new-driver'],
+    match: ['fleet-and-drivers', 'add-new-truck', 'drivers', 'add-new-driver', '/fuel'],
     children: [
       { id: 'fleet-vehicles', label: 'Vehicles', icon: Truck, path: '/fleet-and-drivers', match: ['fleet-and-drivers', 'add-new-truck'], resource: 'trucks' },
       { id: 'fleet-drivers', label: 'Drivers', icon: UserRound, path: '/drivers', match: ['drivers', 'add-new-driver'], resource: 'drivers' },
+      // Fuel sits under Fleet rather than beside Trips: a filling belongs to a
+      // vehicle, and plenty of them happen with no trip at all.
+      { id: 'fleet-fuel', label: 'Fuel', icon: Fuel, path: '/fuel', match: ['/fuel'], resource: 'fuel' },
     ],
   },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings', match: ['settings'] },

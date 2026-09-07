@@ -796,6 +796,98 @@ export const tripOrders = {
   tracking: (id) => apiCall(`/trip-orders/${id}/tracking`),
 };
 
+// Fuel Management — the fuelling register and its efficiency reports.
+//
+// Fuel is vehicle-centric: an entry needs a vehicle but not a trip, because a
+// yard top-up between jobs is still a filling and the fleet's mileage history
+// is only continuous if it is recorded. Where an entry does name a trip, the
+// server maintains that trip's fuel expense line from it, so the bill is typed
+// once and the trip's profit still accounts for it.
+//
+// Every KM/L, cost/km and L/100KM figure below is computed by the server.
+// Nothing in the UI recalculates one — a browser-side number is one nobody can
+// audit, and a null means "not known", which is rendered as a dash and never
+// as a zero.
+export const fuel = {
+  // The register. All filtering, sorting and pagination happen server-side: a
+  // fleet records a filling per vehicle every few days and the browser should
+  // never hold them all. Returns { entries, pagination }.
+  list: ({
+    page, limit, search, truck, driver, trip, fuelType, station,
+    from, to, flagged, unreviewed, sortBy, sortDir,
+  } = {}) =>
+    apiCall(`/fuel${toQuery({
+      page, limit, search, truck, driver, trip, fuelType, station,
+      from, to, sortBy, sortDir,
+      // Only sent when true: `flagged=false` would read as a filter for
+      // unflagged entries, which is not what an unticked box means.
+      flagged: flagged ? 'true' : undefined,
+      unreviewed: unreviewed ? 'true' : undefined,
+    })}`),
+
+  // One entry in full, receipt image included. The list omits the image.
+  get: (id) => apiCall(`/fuel/${id}`),
+
+  // The dropdown vocabulary — fuel types with their units, payment modes, fill
+  // types, flag reasons. Authoritative; constants/fuel.js holds a copy for the
+  // first render.
+  options: () => apiCall('/fuel/options'),
+
+  // Station names this account has already used, most-used first, for the
+  // entry form's autocomplete. Typing a pump that already exists should be one
+  // keystroke rather than a re-spelling that splits the station-wise report.
+  stations: ({ search } = {}) => apiCall(`/fuel/stations${toQuery({ search })}`),
+
+  // The previous filling for a vehicle, so the form can show the last odometer
+  // reading while the operator types the new one — catching a transposed digit
+  // at the keyboard beats flagging it afterwards.
+  lastEntry: (truckId) => apiCall(`/fuel/last-entry/${truckId}`),
+
+  create: (payload) => apiCall('/fuel', { method: 'POST', body: JSON.stringify(payload) }),
+
+  update: (id, payload) =>
+    apiCall(`/fuel/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  remove: (id) => apiCall(`/fuel/${id}`, { method: 'DELETE' }),
+
+  // Dismiss an entry's outlier flags after looking into them (M3-F06). The
+  // flags stay on the record — they were genuinely raised — but it stops
+  // counting as outstanding.
+  review: (id, note) =>
+    apiCall(`/fuel/${id}/review`, { method: 'POST', body: JSON.stringify({ note }) }),
+
+  // --- M3-F07 reports ----------------------------------------------------
+  // All of these take the same filter set as `list`.
+
+  // The stat strip: bought, spent, burnt, and how much needs looking at.
+  summary: (filters = {}) => apiCall(`/fuel/summary${toQuery(filters)}`),
+
+  // Grouped consumption, cost and efficiency. `groupBy` is one of
+  // vehicle | driver | station | trip.
+  report: (groupBy, filters = {}) => apiCall(`/fuel/reports/${groupBy}${toQuery(filters)}`),
+
+  // Spend and efficiency over time, bucketed by day, month or year.
+  trend: ({ granularity = 'month', ...filters } = {}) =>
+    apiCall(`/fuel/trend${toQuery({ granularity, ...filters })}`),
+
+  // Vehicles ranked by efficiency, each against the fleet average for its own
+  // fuel type — the fleet-wide view behind M3-F06.
+  efficiency: (filters = {}) => apiCall(`/fuel/efficiency${toQuery(filters)}`),
+
+  // --- M3-F06 thresholds -------------------------------------------------
+
+  getSettings: () => apiCall('/fuel/settings'),
+
+  saveSettings: (payload) =>
+    apiCall('/fuel/settings', { method: 'PUT', body: JSON.stringify(payload) }),
+
+  // Re-measure and re-judge one vehicle's whole history against the current
+  // thresholds. Deliberately explicit and per vehicle: saving the settings does
+  // not silently rewrite every entry the account has ever recorded.
+  recompute: (truck) =>
+    apiCall('/fuel/recompute', { method: 'POST', body: JSON.stringify({ truck }) }),
+};
+
 export const publicTrip = (token) => apiCall(`/trips/public/${token}`);
 
 export const setAuthToken = (token) => {

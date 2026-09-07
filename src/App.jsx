@@ -29,6 +29,10 @@ import { TripForm } from './pages/TripForm';
 import { TripDetail } from './pages/TripDetail';
 import { Customers } from './pages/Customers';
 import { CustomerForm } from './pages/CustomerForm';
+import { FuelManagement } from './pages/FuelManagement';
+import { FuelForm } from './pages/FuelForm';
+import { FuelReports } from './pages/FuelReports';
+import { FuelSettings } from './pages/FuelSettings';
 import { AddNewTruck } from './pages/AddNewTruck';
 import { SettingsPage } from './pages/Settings';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -237,6 +241,50 @@ function App() {
         element={
           <ProtectedRoute clientOnly resource="customers">
             <CustomerForm />
+          </ProtectedRoute>
+        }
+      />
+      {/* Fuel Management. Gated on its own `fuel` resource: fuelling is
+          vehicle-centric, and a fuel clerk should not imply a dispatcher. */}
+      <Route
+        path="/fuel"
+        element={
+          <ProtectedRoute clientOnly resource="fuel">
+            <FuelManagement />
+          </ProtectedRoute>
+        }
+      />
+      {/* Declared before /fuel/:id so "new", "reports" and "settings" are
+          never read as entry ids. */}
+      <Route
+        path="/fuel/new"
+        element={
+          <ProtectedRoute clientOnly resource="fuel">
+            <FuelForm />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/fuel/reports"
+        element={
+          <ProtectedRoute clientOnly resource="fuel">
+            <FuelReports />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/fuel/settings"
+        element={
+          <ProtectedRoute clientOnly resource="fuel">
+            <FuelSettings />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/fuel/:id"
+        element={
+          <ProtectedRoute clientOnly resource="fuel">
+            <FuelForm />
           </ProtectedRoute>
         }
       />
