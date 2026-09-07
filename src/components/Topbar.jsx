@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin, ShieldCheck, Users, UserRound, Cpu, History } from 'lucide-react';
+import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin, ShieldCheck, Users, UserRound, Cpu, History, ClipboardList, Building2 } from 'lucide-react';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -43,7 +43,25 @@ const timeAgo = (iso) => {
 // are superadmin-only pages, so neither child carries a `resource`.
 const CLIENT_NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', match: ['dashboard'] },
-  { id: 'trips', label: 'Trips & Documents', icon: FileText, path: '/trips-and-documents', match: ['trips-and-documents', 'add-new-trip'], resource: 'trips' },
+  // Trip Management: the operational trip, plus the customer master trips are
+  // booked against. Kept separate from "Trips & Documents" below, which is the
+  // LR/invoice paperwork side and has always been its own screen.
+  //
+  // The match fragments are deliberately specific ('/trips' with its leading
+  // slash, not 'trips'), because matching is a substring test and a bare
+  // 'trips' would also light this up on /trips-and-documents.
+  {
+    id: 'tripmgmt',
+    label: 'Trip Management',
+    icon: ClipboardList,
+    path: '/trips',
+    match: ['/trips', '/customers'],
+    children: [
+      { id: 'tripmgmt-trips', label: 'Trips', icon: ClipboardList, path: '/trips', match: ['/trips'], resource: 'trips' },
+      { id: 'tripmgmt-customers', label: 'Customers', icon: Building2, path: '/customers', match: ['/customers'], resource: 'customers' },
+    ],
+  },
+  { id: 'trips', label: 'Trips & Documents', icon: FileText, path: '/trips-and-documents', match: ['trips-and-documents', 'add-new-trip'], resource: 'billing' },
   { id: 'ledger', label: 'Daily Ledger', icon: Calendar, path: '/daily-ledger', match: ['daily-ledger', 'add-ledger-entry'], resource: 'ledger' },
   {
     id: 'fleet',

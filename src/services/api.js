@@ -562,6 +562,240 @@ export const history = {
     ),
 };
 
+// Customers — the customer master a trip is booked against. Distinct from the
+// consignor/consignee blocks embedded on a billing trip, which stay as they are
+// so historic LRs and invoices keep rendering from what was typed at the time.
+export const customers = {
+  // Filters: { search: 'acme' } for the trip form's picker,
+  // { status: 'Active' } for the master list.
+  list: ({ search, status } = {}) => apiCall(`/customers${toQuery({ search, status })}`),
+
+  // One customer, plus a small summary of their trips.
+  get: (id) => apiCall(`/customers/${id}`),
+
+  options: () => apiCall('/customers/options'),
+
+  create: (payload) =>
+    apiCall('/customers', { method: 'POST', body: JSON.stringify(payload) }),
+
+  update: (id, payload) =>
+    apiCall(`/customers/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+  // Refused with a 409 while trips still reference the customer; the error
+  // says how many and suggests marking them Inactive instead.
+  remove: (id) => apiCall(`/customers/${id}`, { method: 'DELETE' }),
+};
+
+// Trip Management — the operational trip: who it is for, what it carries, who
+// drives it, what it earned and what it cost.
+//
+// Three trip-shaped things now exist in this API and they are not the same:
+//   tripOrders (here)  the job the office dispatches
+//   trips              the GPS route and the trail actually driven
+//   billing            the LR and tax invoice paperwork
+//
+// Every money and distance figure below is computed by the server. Nothing in
+// the UI recalculates a total — a browser-side number is one nobody can audit,
+// and two screens disagreeing about a trip's profit is worse than either being
+// a moment stale.
+export const tripOrders = {
+  // The trip list. All filtering, sorting and pagination happen server-side:
+  // a fleet accumulates thousands of trips and the browser should never hold
+  // them all. Returns { trips, pagination }.
+  list: ({
+    page, limit, search, status, tripType,
+    customer, truck, driver, from, to, sortBy, sortDir,
+  } = {}) =>
+    apiCall(`/trip-orders${toQuery({
+      page, limit, search,
+      // Multi-select filters go as comma-separated lists.
+      status: Array.isArray(status) ? status.join(',') : status,
+      tripType: Array.isArray(tripType) ? tripType.join(',') : tripType,
+      customer, truck, driver, from, to, sortBy, sortDir,
+    })}`),
+
+  // Counts by status and the money totals behind the list's stat strip,
+  // aggregated in the database rather than by loading every trip.
+  summary: () => apiCall('/trip-orders/summary'),
+
+  // The dropdown vocabulary — types, statuses, categories, checklist items.
+  // Authoritative; constants/trip.js holds a copy for the first render.
+  options: () => apiCall('/trip-orders/options'),
+
+  // What the next trip number would be. A preview only: the number is actually
+  // allocated at save time, so two people on the form at once still get
+  // distinct numbers.
+  nextNumber: () => apiCall('/trip-orders/next-number'),
+
+  // One trip in full, with { profitability, variance, allowedTransitions }.
+  // `allowedTransitions` is what the detail page's action buttons are built
+  // from, so the UI can never offer a move the server would refuse.
+  get: (id) => apiCall(`/trip-orders/${id}`),
+
+  create: (payload) =>
+    apiCall('/trip-orders', { method: 'POST', body: JSON.stringify(payload) }),
+
+  // Edits the trip's own fields only. Assignment, stops, cargo, money and
+  // status each have their own call below, because each has validation a
+  // generic update cannot perform.
+  update: (id, payload) =>
+    apiCall(`/trip-orders/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+
+  // Only a draft can be deleted. A dispatched trip is a record of something
+  // that happened, so it is cancelled instead — the API returns a 409 saying so.
+  remove: (id) => apiCall(`/trip-orders/${id}`, { method: 'DELETE' }),
+
+  // Move the trip through its lifecycle. Rejected with a 409 and a plain-English
+  // reason when the transition is not legal, or when the dispatch checklist is
+  // incomplete (the response then carries `missingChecklistItems`).
+  setStatus: (id, status, { reason, lat, lng } = {}) =>
+    apiCall(`/trip-orders/${id}/status`, {
+      method: 'POST',
+      body: JSON.stringify({ status, reason, lat, lng }),
+    }),
+
+  // --- Assignment -------------------------------------------------------
+  // The fleet and roster for this trip, each row marked with the trip already
+  // holding it (`busyOnTrip`), so the picker can show why rather than hide it.
+  assignmentOptions: (id) => apiCall(`/trip-orders/${id}/assignment-options`),
+
+  // The verdict for one vehicle or driver without committing:
+  // { ok, blockers, warnings, detail }. Blockers refuse the assignment;
+  // warnings are shown and the assignment proceeds.
+  checkVehicle: (id, truckId) => apiCall(`/trip-orders/${id}/vehicle-check/${truckId}`),
+  checkDriver: (id, driverId) => apiCall(`/trip-orders/${id}/driver-check/${driverId}`),
+
+  // `allowOverride` pushes past a blocker. Only a seat holding trips:manage may;
+  // for anyone else the API refuses and returns canOverride: false. Every
+  // override is recorded on the trip and in the audit log.
+  assignVehicle: (id, truck, { allowOverride = false } = {}) =>
+    apiCall(`/trip-orders/${id}/assign-vehicle`, {
+      method: 'POST',
+      body: JSON.stringify({ truck, allowOverride }),
+    }),
+
+  assignDriver: (id, driver, { allowOverride = false } = {}) =>
+    apiCall(`/trip-orders/${id}/assign-driver`, {
+      method: 'POST',
+      body: JSON.stringify({ driver, allowOverride }),
+    }),
+
+  saveCrew: (id, crew) =>
+    apiCall(`/trip-orders/${id}/crew`, { method: 'PUT', body: JSON.stringify({ crew }) }),
+
+  // --- Stops ------------------------------------------------------------
+  // Replaces the whole list in travel order — this is also how a reorder is
+  // saved. Stops that already exist keep their arrival times and POD; only the
+  // planning fields are taken from what is sent.
+  saveStops: (id, stops) =>
+    apiCall(`/trip-orders/${id}/stops`, { method: 'PUT', body: JSON.stringify({ stops }) }),
+
+  addStop: (id, stop) =>
+    apiCall(`/trip-orders/${id}/stops`, { method: 'POST', body: JSON.stringify(stop) }),
+
+  // `action` of 'arrive' | 'depart' | 'complete' | 'skip' stamps the times;
+  // omitting it edits the stop's planning fields instead.
+  updateStop: (id, stopId, payload) =>
+    apiCall(`/trip-orders/${id}/stops/${stopId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  saveStopPod: (id, stopId, pod) =>
+    apiCall(`/trip-orders/${id}/stops/${stopId}/pod`, {
+      method: 'PUT',
+      body: JSON.stringify(pod),
+    }),
+
+  // A stop the vehicle already reached is marked skipped rather than deleted —
+  // the response says which happened via `skipped`.
+  removeStop: (id, stopId) =>
+    apiCall(`/trip-orders/${id}/stops/${stopId}`, { method: 'DELETE' }),
+
+  // --- Cargo ------------------------------------------------------------
+  // Replaces the cargo list and returns `capacityCheck` against the assigned
+  // vehicle. Over-capacity does not fail this call — it is the assignment that
+  // blocks, which is where an overloaded vehicle would actually be dispatched.
+  saveCargo: (id, cargo) =>
+    apiCall(`/trip-orders/${id}/cargo`, { method: 'PUT', body: JSON.stringify({ cargo }) }),
+
+  // --- Money ------------------------------------------------------------
+  // Each of these returns the recomputed `totals` alongside the lines, so the
+  // UI updates its figures from the server's arithmetic rather than its own.
+  addRevenue: (id, line) =>
+    apiCall(`/trip-orders/${id}/revenue`, { method: 'POST', body: JSON.stringify(line) }),
+
+  updateRevenue: (id, lineId, line) =>
+    apiCall(`/trip-orders/${id}/revenue/${lineId}`, { method: 'PUT', body: JSON.stringify(line) }),
+
+  removeRevenue: (id, lineId) =>
+    apiCall(`/trip-orders/${id}/revenue/${lineId}`, { method: 'DELETE' }),
+
+  addExpense: (id, line) =>
+    apiCall(`/trip-orders/${id}/expenses`, { method: 'POST', body: JSON.stringify(line) }),
+
+  updateExpense: (id, lineId, line) =>
+    apiCall(`/trip-orders/${id}/expenses/${lineId}`, { method: 'PUT', body: JSON.stringify(line) }),
+
+  removeExpense: (id, lineId) =>
+    apiCall(`/trip-orders/${id}/expenses/${lineId}`, { method: 'DELETE' }),
+
+  // Expense lists omit the scanned bill; `hasReceipt` says one exists and this
+  // fetches it when the user opens it. Same pattern as the ledger's receipts.
+  getReceipt: (id, lineId) => apiCall(`/trip-orders/${id}/expenses/${lineId}/receipt`),
+
+  // Revenue - expenses = profit, plus the per-km rates and margin. Server-side.
+  profitability: (id) => apiCall(`/trip-orders/${id}/profitability`),
+
+  // --- Execution --------------------------------------------------------
+  saveChecklist: (id, checklist) =>
+    apiCall(`/trip-orders/${id}/checklist`, {
+      method: 'PUT',
+      body: JSON.stringify({ checklist }),
+    }),
+
+  // Starting odometer is required. Moves the trip to In Transit, going through
+  // Dispatched (and its checklist gate) if it was only Ready.
+  start: (id, reading) =>
+    apiCall(`/trip-orders/${id}/start`, { method: 'POST', body: JSON.stringify(reading) }),
+
+  // Final odometer is required and must not be below the starting one — the API
+  // refuses with a 400 naming both readings.
+  end: (id, reading) =>
+    apiCall(`/trip-orders/${id}/end`, { method: 'POST', body: JSON.stringify(reading) }),
+
+  // --- POD, documents, events ------------------------------------------
+  savePod: (id, pod) =>
+    apiCall(`/trip-orders/${id}/pod`, { method: 'PUT', body: JSON.stringify(pod) }),
+
+  // The signature and photo behind a POD, fetched only when it is opened. Pass
+  // { stopId } for a per-stop POD.
+  getPodMedia: (id, { stopId } = {}) =>
+    apiCall(`/trip-orders/${id}/pod/media${toQuery({ stopId })}`),
+
+  listDocuments: (id) => apiCall(`/trip-orders/${id}/documents`),
+
+  addDocument: (id, document) =>
+    apiCall(`/trip-orders/${id}/documents`, { method: 'POST', body: JSON.stringify(document) }),
+
+  getDocument: (id, docId) => apiCall(`/trip-orders/${id}/documents/${docId}`),
+
+  removeDocument: (id, docId) =>
+    apiCall(`/trip-orders/${id}/documents/${docId}`, { method: 'DELETE' }),
+
+  addEvent: (id, event) =>
+    apiCall(`/trip-orders/${id}/events`, { method: 'POST', body: JSON.stringify(event) }),
+
+  // Status changes, events, stop arrivals and the POD merged into one ordered
+  // list by the server, so the Activity tab renders it directly.
+  timeline: (id) => apiCall(`/trip-orders/${id}/timeline`),
+
+  // Where the vehicle is and how it is doing against the plan. When there is no
+  // tracker or no linked route this returns { available: false, reason } — the
+  // UI shows that reason rather than an invented position or ETA.
+  tracking: (id) => apiCall(`/trip-orders/${id}/tracking`),
+};
+
 export const publicTrip = (token) => apiCall(`/trips/public/${token}`);
 
 export const setAuthToken = (token) => {

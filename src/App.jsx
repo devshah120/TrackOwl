@@ -24,6 +24,11 @@ import { Drivers } from './pages/Drivers';
 import { AddNewDriver } from './pages/AddNewDriver';
 import { FleetMap } from './pages/FleetMap';
 import { TripRoutes } from './pages/TripRoutes';
+import { TripManagement } from './pages/TripManagement';
+import { TripForm } from './pages/TripForm';
+import { TripDetail } from './pages/TripDetail';
+import { Customers } from './pages/Customers';
+import { CustomerForm } from './pages/CustomerForm';
 import { AddNewTruck } from './pages/AddNewTruck';
 import { SettingsPage } from './pages/Settings';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -173,6 +178,65 @@ function App() {
         element={
           <ProtectedRoute clientOnly resource="trucks">
             <AddNewTruck />
+          </ProtectedRoute>
+        }
+      />
+      {/* Trip Management. Gated on the existing `trips` resource; the
+          customer master has its own `customers` resource. */}
+      <Route
+        path="/trips"
+        element={
+          <ProtectedRoute clientOnly resource="trips">
+            <TripManagement />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/trips/new"
+        element={
+          <ProtectedRoute clientOnly resource="trips">
+            <TripForm />
+          </ProtectedRoute>
+        }
+      />
+      {/* Declared before /trips/:id so "new" is never read as an id. */}
+      <Route
+        path="/trips/:id/edit"
+        element={
+          <ProtectedRoute clientOnly resource="trips">
+            <TripForm />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/trips/:id"
+        element={
+          <ProtectedRoute clientOnly resource="trips">
+            <TripDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/customers"
+        element={
+          <ProtectedRoute clientOnly resource="customers">
+            <Customers />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/customers/new"
+        element={
+          <ProtectedRoute clientOnly resource="customers">
+            <CustomerForm />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/customers/:id"
+        element={
+          <ProtectedRoute clientOnly resource="customers">
+            <CustomerForm />
           </ProtectedRoute>
         }
       />
