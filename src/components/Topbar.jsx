@@ -46,28 +46,24 @@ const timeAgo = (iso) => {
 // are superadmin-only pages, so neither child carries a `resource`.
 const CLIENT_NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', match: ['dashboard'] },
-  // Trip Management: the operational trip, the customer master trips are booked
-  // against, and the route map. Kept separate from "Trips & Documents" below,
-  // which is the LR/invoice paperwork side and has always been its own screen.
+  // Trip Management: the LR/invoice paperwork, the customer master trips are
+  // booked against, and the route map. "Trips & Documents" leads the group and
+  // is also where the parent lands, so it no longer sits at the top level.
   //
-  // Matching is a plain substring test over the URL, and these paths overlap:
-  // '/trips' is a prefix of '/trips-and-documents', and '/trip-routes' shares
-  // its stem with both. So the fragments here are anchored with a trailing
-  // delimiter — '/trips/' and an exact '/trips' handled by the $ marker below —
-  // rather than left as bare prefixes that would swallow a sibling's URL.
+  // The operational /trips screen (TripManagement) is still routed but is
+  // deliberately absent from the nav — reach it by URL or from a trip link.
   {
     id: 'tripmgmt',
     label: 'Trip Management',
     icon: ClipboardList,
-    path: '/trips',
-    match: ['/trips$', '/trips/', '/customers', '/trip-routes'],
+    path: '/trips-and-documents',
+    match: ['trips-and-documents', 'add-new-trip', '/customers', '/trip-routes'],
     children: [
-      { id: 'tripmgmt-trips', label: 'Trips', icon: ClipboardList, path: '/trips', match: ['/trips$', '/trips/'], resource: 'trips' },
+      { id: 'trips', label: 'Trips & Documents', icon: FileText, path: '/trips-and-documents', match: ['trips-and-documents', 'add-new-trip'], resource: 'billing' },
       { id: 'tripmgmt-customers', label: 'Customers', icon: Building2, path: '/customers', match: ['/customers'], resource: 'customers' },
       { id: 'tripmgmt-routes', label: 'Trip Routes', icon: Route, path: '/trip-routes', match: ['/trip-routes'], resource: 'tracking' },
     ],
   },
-  { id: 'trips', label: 'Trips & Documents', icon: FileText, path: '/trips-and-documents', match: ['trips-and-documents', 'add-new-trip'], resource: 'billing' },
   { id: 'ledger', label: 'Daily Ledger', icon: Calendar, path: '/daily-ledger', match: ['daily-ledger', 'add-ledger-entry'], resource: 'ledger' },
   {
     id: 'fleet',
