@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin, ShieldCheck, Users, UserRound, Cpu, History, ClipboardList, Building2, Fuel } from 'lucide-react';
+import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin, ShieldCheck, Users, UserRound, Cpu, History, ClipboardList, Building2, Fuel, Wrench, CalendarClock, Disc3, BatteryCharging } from 'lucide-react';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -77,6 +77,28 @@ const CLIENT_NAV_ITEMS = [
       // Fuel sits under Fleet rather than beside Trips: a filling belongs to a
       // vehicle, and plenty of them happen with no trip at all.
       { id: 'fleet-fuel', label: 'Fuel', icon: Fuel, path: '/fuel', match: ['/fuel'], resource: 'fuel' },
+    ],
+  },
+  // Maintenance Management. Its own top-level group rather than a child of
+  // Fleet, because it is a whole workflow — job cards, a repair queue and two
+  // component masters — not another register hanging off the vehicle.
+  //
+  // The parent lands on the dashboard, which is the screen that answers "what
+  // needs doing"; the children are the registers behind it. All five share the
+  // `maintenance` resource, so a seat without it sees none of them.
+  {
+    id: 'maintenance',
+    label: 'Maintenance',
+    icon: Wrench,
+    path: '/maintenance',
+    match: ['/maintenance'],
+    children: [
+      { id: 'maint-dashboard', label: 'Overview', icon: LayoutDashboard, path: '/maintenance', match: ['/maintenance$'], resource: 'maintenance' },
+      { id: 'maint-services', label: 'Service Records', icon: ClipboardList, path: '/maintenance/services', match: ['/maintenance/services'], resource: 'maintenance' },
+      { id: 'maint-repairs', label: 'Repairs', icon: Wrench, path: '/maintenance/repairs', match: ['/maintenance/repairs'], resource: 'maintenance' },
+      { id: 'maint-reminders', label: 'Reminders', icon: CalendarClock, path: '/maintenance/reminders', match: ['/maintenance/reminders'], resource: 'maintenance' },
+      { id: 'maint-tyres', label: 'Tyres', icon: Disc3, path: '/maintenance/tyres', match: ['/maintenance/tyres'], resource: 'maintenance' },
+      { id: 'maint-batteries', label: 'Batteries', icon: BatteryCharging, path: '/maintenance/batteries', match: ['/maintenance/batteries'], resource: 'maintenance' },
     ],
   },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings', match: ['settings'] },

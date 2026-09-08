@@ -33,6 +33,19 @@ import { FuelManagement } from './pages/FuelManagement';
 import { FuelForm } from './pages/FuelForm';
 import { FuelReports } from './pages/FuelReports';
 import { FuelSettings } from './pages/FuelSettings';
+import { MaintenanceDashboard } from './pages/MaintenanceDashboard';
+import { MaintenanceReminders } from './pages/MaintenanceReminders';
+import { MaintenanceReports } from './pages/MaintenanceReports';
+import { MaintenanceSettings } from './pages/MaintenanceSettings';
+import { ServiceRecords } from './pages/ServiceRecords';
+import { ServiceForm } from './pages/ServiceForm';
+import { RepairRequests } from './pages/RepairRequests';
+import { RepairDetail } from './pages/RepairDetail';
+import { RepairForm } from './pages/RepairForm';
+import { TyreRegister } from './pages/TyreRegister';
+import { TyreDetail } from './pages/TyreDetail';
+import { BatteryRegister } from './pages/BatteryRegister';
+import { BatteryForm } from './pages/BatteryForm';
 import { AddNewTruck } from './pages/AddNewTruck';
 import { SettingsPage } from './pages/Settings';
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -285,6 +298,140 @@ function App() {
         element={
           <ProtectedRoute clientOnly resource="fuel">
             <FuelForm />
+          </ProtectedRoute>
+        }
+      />
+      {/* Maintenance Management. Gated on its own `maintenance` resource:
+          maintenance is vehicle-centric like fuel, and a workshop clerk who
+          books job cards has no business editing the fleet register itself.
+
+          The static segments are all declared before their `:id` siblings, so
+          "new", "reports" and "settings" are never read as record ids. */}
+      <Route
+        path="/maintenance"
+        element={
+          <ProtectedRoute clientOnly resource="maintenance">
+            <MaintenanceDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/maintenance/reminders"
+        element={
+          <ProtectedRoute clientOnly resource="maintenance">
+            <MaintenanceReminders />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/maintenance/reports"
+        element={
+          <ProtectedRoute clientOnly resource="maintenance">
+            <MaintenanceReports />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/maintenance/settings"
+        element={
+          <ProtectedRoute clientOnly resource="maintenance">
+            <MaintenanceSettings />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* M3-M02 — service records */}
+      <Route
+        path="/maintenance/services"
+        element={
+          <ProtectedRoute clientOnly resource="maintenance">
+            <ServiceRecords />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/maintenance/services/new"
+        element={
+          <ProtectedRoute clientOnly resource="maintenance">
+            <ServiceForm />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/maintenance/services/:id"
+        element={
+          <ProtectedRoute clientOnly resource="maintenance">
+            <ServiceForm />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* M3-M04 / M3-M05 — repairs. The detail screen is where a job moves
+          through its workflow, so it is the landing page rather than the form. */}
+      <Route
+        path="/maintenance/repairs"
+        element={
+          <ProtectedRoute clientOnly resource="maintenance">
+            <RepairRequests />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/maintenance/repairs/new"
+        element={
+          <ProtectedRoute clientOnly resource="maintenance">
+            <RepairForm />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/maintenance/repairs/:id/edit"
+        element={
+          <ProtectedRoute clientOnly resource="maintenance">
+            <RepairForm />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/maintenance/repairs/:id"
+        element={
+          <ProtectedRoute clientOnly resource="maintenance">
+            <RepairDetail />
+          </ProtectedRoute>
+        }
+      />
+
+      {/* M3-M06 to M3-M09 — the tyre and battery masters. Both sit behind the
+          same `maintenance` resource as the job cards. */}
+      <Route
+        path="/maintenance/tyres"
+        element={
+          <ProtectedRoute clientOnly resource="maintenance">
+            <TyreRegister />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/maintenance/tyres/:id"
+        element={
+          <ProtectedRoute clientOnly resource="maintenance">
+            <TyreDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/maintenance/batteries"
+        element={
+          <ProtectedRoute clientOnly resource="maintenance">
+            <BatteryRegister />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/maintenance/batteries/:id"
+        element={
+          <ProtectedRoute clientOnly resource="maintenance">
+            <BatteryForm />
           </ProtectedRoute>
         }
       />

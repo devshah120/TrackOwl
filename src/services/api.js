@@ -888,6 +888,237 @@ export const fuel = {
     apiCall('/fuel/recompute', { method: 'POST', body: JSON.stringify({ truck }) }),
 };
 
+// Maintenance Management — services, repairs, and the tyre and battery masters.
+//
+// Vehicle-centric like fuel: a service, a repair, a tyre and a battery all
+// belong to a vehicle and to no trip. Where the module differs is that it
+// tracks *fitted components* — a tyre is an asset that moves between positions
+// and is eventually scrapped, not an event that happens once.
+//
+// Every job total, cost per kilometre and due-date verdict below is computed by
+// the server. Nothing in the UI recalculates one, and a null means "not known",
+// rendered as a dash and never as a zero.
+export const maintenance = {
+  // The dropdown vocabulary — service types with their intervals, the repair
+  // workflow and what each state may move to, tyre positions, battery health.
+  // Authoritative; constants/maintenance.js holds a copy for the first render.
+  options: () => apiCall('/maintenance/options'),
+
+  // M3-M01. Upcoming and overdue service, vehicles under repair, maintenance
+  // cost, and tyre/battery status — one call, so the screen makes one request
+  // rather than six.
+  dashboard: (filters = {}) => apiCall(`/maintenance/dashboard${toQuery(filters)}`),
+
+  // M3-M10. What is due or overdue across services, tyres and batteries, worst
+  // first. Filterable by `kind` (service | tyre | battery) and `status`
+  // (overdue | due).
+  reminders: ({ truck, kind, status } = {}) =>
+    apiCall(`/maintenance/reminders${toQuery({ truck, kind, status })}`),
+
+  // Workshop names this account has already used, most-used first, for the job
+  // card autocomplete. Typing a garage that already exists should be one
+  // keystroke rather than a re-spelling that splits the vendor report.
+  workshops: ({ search } = {}) => apiCall(`/maintenance/workshops${toQuery({ search })}`),
+
+  // What the form should suggest for "next service", given a type and a
+  // reading. A suggestion only — the record stores whatever the workshop
+  // actually specified.
+  nextServiceSuggestion: ({ serviceType, servicedAt, odometer } = {}) =>
+    apiCall(`/maintenance/next-service-suggestion${toQuery({ serviceType, servicedAt, odometer })}`),
+
+  // One vehicle's service and repair history, plus the newest service of each
+  // type — what each reminder clock hangs off.
+  vehicleHistory: (truckId) => apiCall(`/maintenance/vehicle/${truckId}/history`),
+
+  // --- M3-M02: service records -------------------------------------------
+
+  services: {
+    // The register. Filtering, sorting and pagination are all server-side.
+    // Returns { records, pagination }.
+    list: ({ page, limit, search, truck, serviceType, workshop, from, to, sortBy, sortDir } = {}) =>
+      apiCall(`/maintenance/services${toQuery({
+        page, limit, search, truck, serviceType, workshop, from, to, sortBy, sortDir,
+      })}`),
+
+    // One record in full, invoice image included. The list omits the image.
+    get: (id) => apiCall(`/maintenance/services/${id}`),
+
+    create: (payload) =>
+      apiCall('/maintenance/services', { method: 'POST', body: JSON.stringify(payload) }),
+
+    update: (id, payload) =>
+      apiCall(`/maintenance/services/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+    remove: (id) => apiCall(`/maintenance/services/${id}`, { method: 'DELETE' }),
+  },
+
+  // --- M3-M04 / M3-M05: repair requests ----------------------------------
+
+  repairs: {
+    // `open: true` narrows to everything not yet finished — the workshop queue.
+    list: ({ page, limit, search, truck, status, priority, workshop, from, to, open, sortBy, sortDir } = {}) =>
+      apiCall(`/maintenance/repairs${toQuery({
+        page, limit, search, truck, status, priority, workshop, from, to, sortBy, sortDir,
+        // Only sent when true: `open=false` would read as a filter for closed
+        // jobs, which is not what an unticked box means.
+        open: open ? 'true' : undefined,
+      })}`),
+
+    get: (id) => apiCall(`/maintenance/repairs/${id}`),
+
+    // The number the next request would take, for the form to show before
+    // anything is saved. A preview: it is not reserved.
+    nextNumber: () => apiCall('/maintenance/repairs/next-number'),
+
+    create: (payload) =>
+      apiCall('/maintenance/repairs', { method: 'POST', body: JSON.stringify(payload) }),
+
+    update: (id, payload) =>
+      apiCall(`/maintenance/repairs/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+    // M3-M05. The only way a repair status changes: the server checks the
+    // transition is legal, appends to the job history and stamps the
+    // milestones the downtime figure is measured between. It also moves the
+    // vehicle own status to Maintenance while work is in progress.
+    setStatus: (id, status, note = '') =>
+      apiCall(`/maintenance/repairs/${id}/status`, {
+        method: 'POST',
+        body: JSON.stringify({ status, note }),
+      }),
+
+    remove: (id) => apiCall(`/maintenance/repairs/${id}`, { method: 'DELETE' }),
+  },
+
+  // --- M3-M11: reports ---------------------------------------------------
+  // All of these take the same filter set as the lists.
+
+  // The stat strip: what was spent, on what, and how much of it was unplanned.
+  summary: (filters = {}) => apiCall(`/maintenance/summary${toQuery(filters)}`),
+
+  // Grouped cost and activity. `groupBy` is one of
+  // vehicle | service | vendor | part | tyre | battery | repair.
+  report: (groupBy, filters = {}) =>
+    apiCall(`/maintenance/reports/${groupBy}${toQuery(filters)}`),
+
+  // Spend over time, bucketed by day, month or year.
+  trend: ({ granularity = 'month', ...filters } = {}) =>
+    apiCall(`/maintenance/trend${toQuery({ granularity, ...filters })}`),
+
+  // --- M3-M10: reminder thresholds ---------------------------------------
+
+  getSettings: () => apiCall('/maintenance/settings'),
+
+  saveSettings: (payload) =>
+    apiCall('/maintenance/settings', { method: 'PUT', body: JSON.stringify(payload) }),
+};
+
+// The tyre and battery masters (M3-M06 to M3-M09).
+//
+// Separate from `maintenance` above because these are asset registers with a
+// fit/remove/scrap lifecycle rather than job cards, though both sit behind the
+// same `maintenance` permission resource.
+//
+// A tyre or battery is always created into stock and reaches a vehicle through
+// `fit` / `install`. That is not a formality: those endpoints open the stint the
+// component life is measured over, and a record that skipped them would have no
+// distance and therefore no cost per kilometre, ever.
+export const components = {
+  tyres: {
+    // `dueForReplacement: true` narrows to fitted tyres at or below the
+    // account minimum tread — the replacement queue.
+    list: ({ page, limit, search, truck, status, position, brand, dueForReplacement, sortBy, sortDir } = {}) =>
+      apiCall(`/components/tyres${toQuery({
+        page, limit, search, truck, status, position, brand, sortBy, sortDir,
+        dueForReplacement: dueForReplacement ? 'true' : undefined,
+      })}`),
+
+    // One tyre in full, fitment and retread history included. The list omits
+    // both — a tyre with twenty fitments is rows of data no table cell shows.
+    get: (id) => apiCall(`/components/tyres/${id}`),
+
+    // M3-M07. A vehicle current tyre layout, keyed by position so the UI can
+    // draw an axle diagram without deciding which tyre is at which corner.
+    layout: (truckId) => apiCall(`/components/tyres/layout/${truckId}`),
+
+    create: (payload) =>
+      apiCall('/components/tyres', { method: 'POST', body: JSON.stringify(payload) }),
+
+    update: (id, payload) =>
+      apiCall(`/components/tyres/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+    // Put a tyre on a vehicle at a position. The odometer reading is required:
+    // it anchors the distance the tyre cost per km is measured from.
+    fit: (id, { truck, position, odometer, fittedAt, notes } = {}) =>
+      apiCall(`/components/tyres/${id}/fit`, {
+        method: 'POST',
+        body: JSON.stringify({ truck, position, odometer, fittedAt, notes }),
+      }),
+
+    // Take it off, closing the stint and banking its distance.
+    remove: (id, { odometer, removedAt, treadAtRemovalMm, reason, status, notes } = {}) =>
+      apiCall(`/components/tyres/${id}/remove`, {
+        method: 'POST',
+        body: JSON.stringify({ odometer, removedAt, treadAtRemovalMm, reason, status, notes }),
+      }),
+
+    // Record a retread. The casing keeps its accumulated distance and the cost
+    // is folded into its per-km figure — a tyre retreaded once has cost its
+    // price plus the retread over its whole life.
+    retread: (id, { date, vendor, cost, notes } = {}) =>
+      apiCall(`/components/tyres/${id}/retread`, {
+        method: 'POST',
+        body: JSON.stringify({ date, vendor, cost, notes }),
+      }),
+
+    destroy: (id) => apiCall(`/components/tyres/${id}`, { method: 'DELETE' }),
+  },
+
+  batteries: {
+    list: ({ page, limit, search, truck, status, brand, health, inWarranty, dueForReplacement, sortBy, sortDir } = {}) =>
+      apiCall(`/components/batteries${toQuery({
+        page, limit, search, truck, status, brand, health, sortBy, sortDir,
+        inWarranty: inWarranty ? 'true' : undefined,
+        dueForReplacement: dueForReplacement ? 'true' : undefined,
+      })}`),
+
+    get: (id) => apiCall(`/components/batteries/${id}`),
+
+    create: (payload) =>
+      apiCall('/components/batteries', { method: 'POST', body: JSON.stringify(payload) }),
+
+    update: (id, payload) =>
+      apiCall(`/components/batteries/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+
+    // Fit it to a vehicle. Where the named position is already occupied, the
+    // server retires the battery that was there and links the two, so a
+    // vehicle battery history reads as a chain.
+    install: (id, { truck, position, odometer, installedAt } = {}) =>
+      apiCall(`/components/batteries/${id}/install`, {
+        method: 'POST',
+        body: JSON.stringify({ truck, position, odometer, installedAt }),
+      }),
+
+    // Take it off. `status` distinguishes a battery put back in the store from
+    // one scrapped or sent back under warranty.
+    remove: (id, { status, reason } = {}) =>
+      apiCall(`/components/batteries/${id}/remove`, {
+        method: 'POST',
+        body: JSON.stringify({ status, reason }),
+      }),
+
+    // M3-M09. A voltage/health check. Health is the tester verdict, not
+    // something derived from the voltage — a tired battery reads fine at rest
+    // and collapses under load.
+    check: (id, { date, voltage, health, specificGravity, checkedBy, notes } = {}) =>
+      apiCall(`/components/batteries/${id}/check`, {
+        method: 'POST',
+        body: JSON.stringify({ date, voltage, health, specificGravity, checkedBy, notes }),
+      }),
+
+    destroy: (id) => apiCall(`/components/batteries/${id}`, { method: 'DELETE' }),
+  },
+};
+
 export const publicTrip = (token) => apiCall(`/trips/public/${token}`);
 
 export const setAuthToken = (token) => {
