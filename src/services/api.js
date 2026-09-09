@@ -567,8 +567,11 @@ export const history = {
 // so historic LRs and invoices keep rendering from what was typed at the time.
 export const customers = {
   // Filters: { search: 'acme' } for the trip form's picker,
-  // { status: 'Active' } for the master list.
-  list: ({ search, status } = {}) => apiCall(`/customers${toQuery({ search, status })}`),
+  // { status: 'Active' } for the master list. `signal` is forwarded rather
+  // than filtered into the query string so the picker can cancel a search that
+  // a newer keystroke has superseded.
+  list: ({ search, status, signal } = {}) =>
+    apiCall(`/customers${toQuery({ search, status })}`, signal ? { signal } : {}),
 
   // One customer, plus a small summary of their trips.
   get: (id) => apiCall(`/customers/${id}`),

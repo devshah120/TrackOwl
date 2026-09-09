@@ -6,8 +6,10 @@ import {
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import { Topbar } from '../components/Topbar';
 import { PlaceSearchInput } from '../components/PlaceSearchInput';
+import { CustomerPicker, customerToParty } from '../components/CustomerPicker';
 import { GoogleFleetMap } from '../components/GoogleFleetMap';
 import { billing, drivers as driversApi, trips as tripsApi, tracking, geo, fleet } from '../services/api';
 
@@ -62,6 +64,10 @@ export function AddNewTrip() {
   const { id } = useParams();
   const isEditing = Boolean(id);
   const { user, logout } = useAuth();
+  const { can } = usePermissions();
+  // A dispatcher may be allowed to book trips without having the customer
+  // master open to them; the party fields stay free text in that case.
+  const canReadCustomers = can('customers', 'read');
 
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -586,6 +592,35 @@ export function AddNewTrip() {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  // Copy a customer master record onto one of the two party blocks. The values
+  // are copied, not linked: BillingTrip renders the printed LR and tax invoice
+  // from these embedded fields, so they must keep what was true when the trip
+  // was booked even if the master is edited later.
+  //
+  // Only non-empty values overwrite, so picking a customer whose master has no
+  // GSTIN on file does not wipe a number the user has already typed by hand.
+  const applyCustomer = (prefix) => (customer) => {
+    if (!customer) return;
+    const party = customerToParty(customer);
+    setFormData((prev) => ({
+      ...prev,
+      [`${prefix}Name`]: party.name || prev[`${prefix}Name`],
+      [`${prefix}Gst`]: party.gst || prev[`${prefix}Gst`],
+      [`${prefix}Address`]: party.address || prev[`${prefix}Address`],
+      [`${prefix}Contact`]: party.contact || prev[`${prefix}Contact`],
+      // Payment terms live on the customer, not the consignment, so the buyer
+      // is the side that carries them onto the trip.
+      ...(prefix === 'buyer' && customer.paymentTerms
+        ? { paymentTerms: customer.paymentTerms }
+        : {}),
+      // asNumberInput keeps a 0% rate showing as an empty field rather than a
+      // literal "0" the user has to clear, matching how the form loads a trip.
+      ...(prefix === 'buyer' && customer.gstRate
+        ? { gstRate: asNumberInput(customer.gstRate) }
+        : {}),
+    }));
   };
 
   const handleDriverChange = (e) => {
@@ -1384,6 +1419,12 @@ export function AddNewTrip() {
 
                   <div className="bg-white rounded-lg border border-slate-200 p-6">
                     <h2 className="text-lg font-semibold text-slate-900 mb-4">Supplier (Consignor)</h2>
+                    {canReadCustomers && (
+                      <CustomerPicker
+                        label="Fill from customer master"
+                        onSelect={applyCustomer('supplier')}
+                      />
+                    )}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className={LABEL}>Supplier Name</label>
@@ -1434,6 +1475,12 @@ export function AddNewTrip() {
 
                   <div className="bg-white rounded-lg border border-slate-200 p-6">
                     <h2 className="text-lg font-semibold text-slate-900 mb-4">Buyer (Consignee)</h2>
+                    {canReadCustomers && (
+                      <CustomerPicker
+                        label="Fill from customer master"
+                        onSelect={applyCustomer('buyer')}
+                      />
+                    )}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className={LABEL}>Buyer Name</label>

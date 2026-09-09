@@ -163,7 +163,7 @@ export function TripsAndDocuments() {
   };
 
   // Editing happens on the full Add/Edit Trip page (/add-new-trip/:id) rather
-  // than in a modal here, so every field of the trip is reachable â€” the modal
+  // than in a modal here, so every field of the trip is reachable — the modal
   // could only reach truck, LR, bill, party, amount, date and status.
 
   return (
@@ -280,7 +280,7 @@ export function TripsAndDocuments() {
                     <td className="px-6 py-4 text-sm text-slate-700">{trip.lr}</td>
                     <td className="px-6 py-4 text-sm text-slate-700">{trip.bill}</td>
                     <td className="px-6 py-4 text-sm text-slate-700">{trip.partyName}</td>
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-900">â‚¹{trip.amount.toLocaleString()}</td>
+                    <td className="px-6 py-4 text-sm font-semibold text-slate-900">₹{trip.amount.toLocaleString()}</td>
                     <td className="px-6 py-4 text-sm">
                       <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(trip.status)}`}>
                         {trip.status}
@@ -384,7 +384,7 @@ export function TripsAndDocuments() {
                 onClick={() => setShowPaymentModal(false)}
                 className="text-slate-500 hover:text-slate-700"
               >
-                âœ•
+                ✕
               </button>
             </div>
             <div className="p-6 space-y-4">
@@ -397,7 +397,7 @@ export function TripsAndDocuments() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm text-slate-600">Total Amount</p>
-                      <p className="text-lg font-semibold text-slate-900">â‚¹{selectedTrip.amount.toLocaleString()}</p>
+                      <p className="text-lg font-semibold text-slate-900">₹{selectedTrip.amount.toLocaleString()}</p>
                     </div>
                     <div>
                       <p className="text-sm text-slate-600">Status</p>
@@ -420,7 +420,7 @@ export function TripsAndDocuments() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-2">Amount (â‚¹)</label>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Amount (₹)</label>
                 <input
                   type="number"
                   placeholder="0"
