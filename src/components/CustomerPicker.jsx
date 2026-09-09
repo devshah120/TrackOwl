@@ -120,7 +120,7 @@ export function CustomerPicker({ label = 'Find in customer master', onSelect, di
           onChange={(e) => setText(e.target.value)}
           onFocus={() => results.length && setOpen(true)}
           placeholder="Search by name, code or GSTIN"
-          className="w-full pl-10 pr-10 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-400"
+          className="block w-full pl-10 pr-10 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-400"
         />
         {busy && (
           <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 animate-spin" />
@@ -137,7 +137,7 @@ export function CustomerPicker({ label = 'Find in customer master', onSelect, di
         )}
 
         {open && (
-          <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+          <div className="absolute top-full left-0 z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
             {results.map((c) => {
               const contact = primaryContact(c);
               return (
