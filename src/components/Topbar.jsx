@@ -122,8 +122,19 @@ const SUPERADMIN_NAV_ITEMS = [
     ],
   },
   { id: 'admin-tracking', label: 'Live Tracking', icon: MapPin, path: '/admin/live-tracking', match: ['admin/live-tracking'] },
-  { id: 'admin-permissions', label: 'Permissions', icon: ShieldCheck, path: '/admin/permissions', match: ['admin/permissions'] },
-  { id: 'admin-audit', label: 'Audit Log', icon: History, path: '/admin/audit', match: ['admin/audit'] },
+  {
+    id: 'admin-access',
+    label: 'Access Control',
+    icon: ShieldCheck,
+    // Opening the parent lands on Permissions; the Audit Log is the record of
+    // what was changed there, which is why the two belong behind one menu.
+    path: '/admin/permissions',
+    match: ['admin/permissions', 'admin/audit'],
+    children: [
+      { id: 'admin-permissions', label: 'Permissions', icon: ShieldCheck, path: '/admin/permissions', match: ['admin/permissions'] },
+      { id: 'admin-audit', label: 'Audit Log', icon: History, path: '/admin/audit', match: ['admin/audit'] },
+    ],
+  },
   { id: 'settings', label: 'Settings', icon: Settings, path: '/settings', match: ['settings'] },
 ];
 
