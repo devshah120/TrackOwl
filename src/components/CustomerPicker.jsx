@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Building2, Loader2, X, Search } from 'lucide-react';
+import { Building2, Loader2, X } from 'lucide-react';
 import { customers as customersApi } from '../services/api';
 
 // Turn a failed customer lookup into something the user can act on. apiCall
@@ -112,7 +112,6 @@ export function CustomerPicker({ label = 'Find in customer master', onSelect, di
     <div className="mb-4" ref={boxRef}>
       <label className="block text-sm font-medium text-slate-700 mb-2">{label}</label>
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
         <input
           type="text"
           value={text}
@@ -120,7 +119,7 @@ export function CustomerPicker({ label = 'Find in customer master', onSelect, di
           onChange={(e) => setText(e.target.value)}
           onFocus={() => results.length && setOpen(true)}
           placeholder="Search by name, code or GSTIN"
-          className="block w-full pl-10 pr-10 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-400"
+          className="block w-full pl-4 pr-10 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-400"
         />
         {busy && (
           <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 animate-spin" />
