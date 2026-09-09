@@ -112,7 +112,7 @@ export function CustomerPicker({ label = 'Find in customer master', onSelect, di
     <div className="mb-4" ref={boxRef}>
       <label className="block text-sm font-medium text-slate-700 mb-2">{label}</label>
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
         <input
           type="text"
           value={text}
@@ -120,16 +120,16 @@ export function CustomerPicker({ label = 'Find in customer master', onSelect, di
           onChange={(e) => setText(e.target.value)}
           onFocus={() => results.length && setOpen(true)}
           placeholder="Search by name, code or GSTIN"
-          className="w-full pl-9 pr-9 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-400"
+          className="w-full pl-11 pr-11 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-400"
         />
         {busy && (
-          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 animate-spin" />
+          <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 animate-spin" />
         )}
         {!busy && text && (
           <button
             type="button"
             onClick={() => { setText(''); setResults([]); setError(null); setOpen(false); }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
             aria-label="Clear search"
           >
             <X className="w-4 h-4" />
