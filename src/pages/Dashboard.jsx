@@ -27,6 +27,10 @@ export function Dashboard() {
   const [ledgerData, setLedgerData] = useState([]);
   const [billingData, setBillingData] = useState([]);
   const [devices, setDevices] = useState([]);
+  // Whether this role can read the fleet list. When it can, the fleet is the
+  // source of truth for which vehicles exist; when it cannot, the dashboard
+  // falls back to the raw tracking devices.
+  const [fleetVisible, setFleetVisible] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,7 +47,10 @@ export function Dashboard() {
       ]);
       if (cancelled) return;
 
-      if (fleetRes.status === 'fulfilled') setTrucksData(fleetRes.value.trucks || []);
+      if (fleetRes.status === 'fulfilled') {
+        setTrucksData(fleetRes.value.trucks || []);
+        setFleetVisible(true);
+      }
       if (ledgerRes.status === 'fulfilled') setLedgerData(ledgerRes.value.entries || []);
       if (billingRes.status === 'fulfilled') setBillingData(billingRes.value.billingTrips || []);
 
@@ -67,7 +74,6 @@ export function Dashboard() {
         const res = await tracking.getDevices();
         if (cancelled) return;
         setDevices(res.devices || []);
-        setSelectedTruck((prev) => prev || res.devices?.[0]?.id || res.devices?.[0]?._id || '');
       } catch {
         // Fleet Summary just stays empty; the main error banner covers fleet/ledger/billing failures.
       }
@@ -158,14 +164,23 @@ export function Dashboard() {
       tracked: false,
     };
   });
-  // Devices not fitted to any fleet truck (e.g. a phone tracker) still belong
-  // on the summary — they are on the map too.
-  devices
-    .filter((d) => !linkedDeviceIds.has(String(d.id || d._id)))
-    .forEach((d) => trucks.push(deviceRow(d, d.name)));
+  // A device not fitted to any fleet truck is not a vehicle of this fleet, so
+  // it stays off the summary and the map. Only a role that cannot read the
+  // fleet sees the raw devices, since it has no trucks to show instead.
+  if (!fleetVisible) {
+    devices
+      .filter((d) => !linkedDeviceIds.has(String(d.id || d._id)))
+      .forEach((d) => trucks.push(deviceRow(d, d.name)));
+  }
   const untrackedTrucks = trucks.filter((t) => !t.tracked);
+  const trackedTrucks = trucks.filter((t) => t.tracked);
   // Map pins carry the truck number rather than the raw device name / IMEI.
-  const deviceLabels = Object.fromEntries(trucks.filter((t) => t.tracked).map((t) => [t.id, t.name]));
+  const deviceLabels = Object.fromEntries(trackedTrucks.map((t) => [t.id, t.name]));
+  // Falls back to the first tracked truck until the user picks one, and if
+  // the picked one drops out of the list.
+  const activeTruckId = trackedTrucks.some((t) => t.id === selectedTruck)
+    ? selectedTruck
+    : trackedTrucks[0]?.id || '';
 
   const recentTrips = [...billingData]
     .sort((a, b) => new Date(b.date) - new Date(a.date))
@@ -265,10 +280,11 @@ export function Dashboard() {
           <h2 className="text-xl font-bold text-slate-900 mb-4">Fleet Live Map</h2>
           <FleetMapWidget
             height="600px"
-            selectedTruck={selectedTruck}
+            selectedTruck={activeTruckId}
             onSelectTruck={setSelectedTruck}
             untrackedTrucks={untrackedTrucks}
             deviceLabels={deviceLabels}
+            fleetOnly={fleetVisible}
           />
         </div>
 
@@ -282,7 +298,7 @@ export function Dashboard() {
                   key={truck.id}
                   onClick={() => setSelectedTruck(truck.id)}
                   className={`w-full text-left p-4 rounded-lg border transition-all ${
-                    selectedTruck === truck.id
+                    activeTruckId === truck.id
                       ? 'bg-blue-50 border-blue-300 shadow-sm'
                       : 'bg-white border-slate-200 hover:border-slate-300'
                   }`}

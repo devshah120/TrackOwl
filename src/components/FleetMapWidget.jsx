@@ -11,6 +11,7 @@ export function FleetMapWidget({
   onSelectTruck,
   untrackedTrucks = [],
   deviceLabels = {},
+  fleetOnly = false,
 }) {
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,9 +25,6 @@ export function FleetMapWidget({
         if (cancelled) return;
         setDevices(data.devices || []);
         setError(null);
-        if (!selectedTruck && data.devices?.length && onSelectTruck) {
-          onSelectTruck(data.devices[0].id || data.devices[0]._id);
-        }
       } catch (err) {
         if (!cancelled) setError(err.message || 'Could not reach the tracking API');
       } finally {
@@ -39,8 +37,15 @@ export function FleetMapWidget({
       cancelled = true;
       clearInterval(timer);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // With fleetOnly, a device not fitted to one of the fleet's trucks is not
+  // plotted; every pin shown carries its truck number.
+  const shown = devices.flatMap((d) => {
+    const label = deviceLabels[String(d.id || d._id)];
+    if (label) return [{ ...d, name: label }];
+    return fleetOnly ? [] : [d];
+  });
 
   if (loading) {
     return (
@@ -69,15 +74,12 @@ export function FleetMapWidget({
       style={{ height }}
     >
       <GoogleFleetMap
-        devices={devices.map((d) => {
-          const label = deviceLabels[String(d.id || d._id)];
-          return label ? { ...d, name: label } : d;
-        })}
+        devices={shown}
         selectedId={selectedTruck}
         onSelect={(id) => onSelectTruck?.(id)}
       />
 
-      {devices.length === 0 && untrackedTrucks.length === 0 && (
+      {shown.length === 0 && untrackedTrucks.length === 0 && (
         <div className="absolute inset-0 z-[1] flex items-center justify-center pointer-events-none">
           <p className="bg-white/90 rounded-lg px-4 py-2 text-sm text-slate-500 shadow">
             No vehicles yet — add one from Live Tracking.
