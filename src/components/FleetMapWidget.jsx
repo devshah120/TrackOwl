@@ -1,11 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Loader } from 'lucide-react';
+import { Loader, SatelliteDish } from 'lucide-react';
 import { tracking } from '../services/api';
 import { GoogleFleetMap } from './GoogleFleetMap';
 
 const POLL_MS = 5000;
 
-export function FleetMapWidget({ height = '500px', selectedTruck, onSelectTruck }) {
+export function FleetMapWidget({
+  height = '500px',
+  selectedTruck,
+  onSelectTruck,
+  untrackedTrucks = [],
+  deviceLabels = {},
+}) {
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -63,16 +69,40 @@ export function FleetMapWidget({ height = '500px', selectedTruck, onSelectTruck 
       style={{ height }}
     >
       <GoogleFleetMap
-        devices={devices}
+        devices={devices.map((d) => {
+          const label = deviceLabels[String(d.id || d._id)];
+          return label ? { ...d, name: label } : d;
+        })}
         selectedId={selectedTruck}
         onSelect={(id) => onSelectTruck?.(id)}
       />
 
-      {devices.length === 0 && (
+      {devices.length === 0 && untrackedTrucks.length === 0 && (
         <div className="absolute inset-0 z-[1] flex items-center justify-center pointer-events-none">
           <p className="bg-white/90 rounded-lg px-4 py-2 text-sm text-slate-500 shadow">
             No vehicles yet — add one from Live Tracking.
           </p>
+        </div>
+      )}
+
+      {/* Fleet trucks with no GPS unit fitted have no position to plot, so
+          they are named here instead of silently missing from the map. */}
+      {untrackedTrucks.length > 0 && (
+        <div className="absolute bottom-4 left-4 z-[10] max-w-[280px] bg-white/95 rounded-lg shadow-lg border border-orange-200">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-orange-100">
+            <SatelliteDish className="w-4 h-4 text-orange-600 shrink-0" />
+            <p className="text-sm font-semibold text-slate-900">
+              {untrackedTrucks.length} {untrackedTrucks.length === 1 ? 'truck needs' : 'trucks need'} a GPS device
+            </p>
+          </div>
+          <ul className="max-h-40 overflow-y-auto px-3 py-2 space-y-1">
+            {untrackedTrucks.map((t) => (
+              <li key={t.id} className="flex items-center justify-between gap-3 text-xs">
+                <span className="font-medium text-slate-800 truncate">{t.name}</span>
+                <span className="text-orange-700 whitespace-nowrap">Not connected</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

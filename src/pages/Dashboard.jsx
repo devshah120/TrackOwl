@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, Truck, AlertCircle, Check } from 'lucide-react';
+import { TrendingUp, Truck, AlertCircle, Check, SatelliteDish } from 'lucide-react';
 import { FleetMapWidget } from '../components/FleetMapWidget';
 import { FleetDashboard } from '../components/FleetDashboard';
 import { fleet, ledger, billing, tracking } from '../services/api';
@@ -126,15 +126,46 @@ export function Dashboard() {
     },
   ];
 
-  // Same live devices Live Tracking shows, so the dashboard summary and the
-  // full map never disagree about which vehicles exist or where they are.
-  const trucks = devices.map((d) => ({
-    id: d.id || d._id,
-    name: d.name,
+  // Every fleet truck is listed, not just the ones reporting: a truck with no
+  // GPS unit fitted shows up as needing one rather than silently missing.
+  // Telemetry comes from the same live devices Live Tracking shows, so the
+  // summary and the map never disagree about where a vehicle is.
+  const deviceById = new Map(devices.map((d) => [String(d.id || d._id), d]));
+  const linkedDeviceIds = new Set();
+  const deviceRow = (d, name) => ({
+    id: String(d.id || d._id),
+    name,
     status: d.status,
     location: d.lastPosition?.latitude ? `${Math.round(d.lastPosition.speed || 0)} km/h` : 'No position yet',
     driver: timeAgo(d.lastSeenAt),
-  }));
+    tracked: true,
+  });
+  const trucks = trucksData.map((t) => {
+    if (t.device) {
+      const deviceId = String(t.device._id || t.device.id || t.device);
+      linkedDeviceIds.add(deviceId);
+      // Prefer the live poll; the copy populated on the truck covers the gap
+      // before the first poll lands.
+      const live = deviceById.get(deviceId) || (typeof t.device === 'object' ? t.device : { _id: deviceId });
+      return deviceRow({ status: 'offline', ...live }, t.number);
+    }
+    return {
+      id: `truck-${t._id || t.id}`,
+      name: t.number,
+      status: 'no gps',
+      location: 'Connect a GPS device to track this truck',
+      driver: t.model || t.vehicleType || 'Truck',
+      tracked: false,
+    };
+  });
+  // Devices not fitted to any fleet truck (e.g. a phone tracker) still belong
+  // on the summary — they are on the map too.
+  devices
+    .filter((d) => !linkedDeviceIds.has(String(d.id || d._id)))
+    .forEach((d) => trucks.push(deviceRow(d, d.name)));
+  const untrackedTrucks = trucks.filter((t) => !t.tracked);
+  // Map pins carry the truck number rather than the raw device name / IMEI.
+  const deviceLabels = Object.fromEntries(trucks.filter((t) => t.tracked).map((t) => [t.id, t.name]));
 
   const recentTrips = [...billingData]
     .sort((a, b) => new Date(b.date) - new Date(a.date))
@@ -169,6 +200,8 @@ export function Dashboard() {
         return 'bg-red-100 text-red-800';
       case 'offline':
         return 'bg-gray-100 text-gray-800';
+      case 'no gps':
+        return 'bg-orange-100 text-orange-800';
       case 'Paid':
         return 'bg-green-100 text-green-800';
       case 'Partial':
@@ -230,35 +263,62 @@ export function Dashboard() {
         {/* Map on Left */}
         <div className="lg:col-span-2">
           <h2 className="text-xl font-bold text-slate-900 mb-4">Fleet Live Map</h2>
-          <FleetMapWidget height="600px" selectedTruck={selectedTruck} onSelectTruck={setSelectedTruck} />
+          <FleetMapWidget
+            height="600px"
+            selectedTruck={selectedTruck}
+            onSelectTruck={setSelectedTruck}
+            untrackedTrucks={untrackedTrucks}
+            deviceLabels={deviceLabels}
+          />
         </div>
 
         {/* Truck Status Cards on Right */}
         <div>
           <h2 className="text-xl font-bold text-slate-900 mb-4">Fleet Summary</h2>
           <div className="space-y-3 max-h-[600px] overflow-y-auto">
-            {trucks.map((truck) => (
-              <button
-                key={truck.id}
-                onClick={() => setSelectedTruck(truck.id)}
-                className={`w-full text-left p-4 rounded-lg border transition-all ${
-                  selectedTruck === truck.id
-                    ? 'bg-blue-50 border-blue-300 shadow-sm'
-                    : 'bg-white border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1">
-                    <p className="text-sm font-semibold text-slate-900">{truck.name}</p>
-                    <p className="text-xs text-slate-500 mt-1">{truck.driver}</p>
+            {trucks.map((truck) =>
+              truck.tracked ? (
+                <button
+                  key={truck.id}
+                  onClick={() => setSelectedTruck(truck.id)}
+                  className={`w-full text-left p-4 rounded-lg border transition-all ${
+                    selectedTruck === truck.id
+                      ? 'bg-blue-50 border-blue-300 shadow-sm'
+                      : 'bg-white border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-slate-900">{truck.name}</p>
+                      <p className="text-xs text-slate-500 mt-1">{truck.driver}</p>
+                    </div>
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(truck.status)}`}>
+                      {truck.status.charAt(0).toUpperCase() + truck.status.slice(1)}
+                    </span>
                   </div>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(truck.status)}`}>
-                    {truck.status.charAt(0).toUpperCase() + truck.status.slice(1)}
-                  </span>
+                  <p className="text-xs text-slate-500">📍 {truck.location}</p>
+                </button>
+              ) : (
+                // Nothing to select on the map, so this card is not a button.
+                <div
+                  key={truck.id}
+                  className="w-full p-4 rounded-lg border border-dashed border-orange-300 bg-orange-50/40"
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-slate-900">{truck.name}</p>
+                      <p className="text-xs text-slate-500 mt-1">{truck.driver}</p>
+                    </div>
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(truck.status)}`}>
+                      No GPS
+                    </span>
+                  </div>
+                  <p className="text-xs text-orange-700 flex items-center gap-1">
+                    <SatelliteDish className="w-3.5 h-3.5" /> {truck.location}
+                  </p>
                 </div>
-                <p className="text-xs text-slate-500">📍 {truck.location}</p>
-              </button>
-            ))}
+              )
+            )}
           </div>
         </div>
       </div>
