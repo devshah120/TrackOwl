@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin, ShieldCheck, Users, UserRound, Cpu, History, ClipboardList, Building2, Fuel, Wrench, CalendarClock, Disc3, BatteryCharging } from 'lucide-react';
+import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin, ShieldCheck, Users, UserRound, Cpu, History, ClipboardList, Building2, Fuel, Wrench, CalendarClock, Disc3, BatteryCharging, Navigation, BellRing, IndianRupee, Receipt, Store, FileBarChart, LineChart, Smartphone, Plug } from 'lucide-react';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -45,29 +45,40 @@ const timeAgo = (iso) => {
 // oversees and the Device Master — the tracking hardware fitted to them. Both
 // are superadmin-only pages, so neither child carries a `resource`.
 const CLIENT_NAV_ITEMS = [
+  // The phone-first driver screen, shown to Driver seats only.
+  { id: 'driverapp', label: 'Driver App', icon: Smartphone, path: '/driver', match: ['/driver$'], driverOnly: true },
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', match: ['dashboard'] },
-  // Trip Management: the LR/invoice paperwork, the customer master trips are
-  // booked against, and the route map. "Trips & Documents" leads the group and
-  // is also where the parent lands, so it no longer sits at the top level.
-  //
-  // The operational /trips screen (TripManagement) is still routed but is
-  // deliberately absent from the nav — reach it by URL or from a trip link.
+  // Tracking: the live map, the drawn GPS routes, and the alerts the tracker
+  // raises (with the geofences that drive them).
   {
-    id: 'tripmgmt',
-    label: 'Trip Management',
-    icon: ClipboardList,
-    path: '/trips-and-documents',
-    match: ['trips-and-documents', 'add-new-trip', '/customers', '/trip-routes'],
+    id: 'tracking',
+    label: 'Tracking',
+    icon: Navigation,
+    path: '/live-tracking',
+    match: ['/live-tracking', '/trip-routes', '/alerts'],
     children: [
-      { id: 'trips', label: 'Trips & Documents', icon: FileText, path: '/trips-and-documents', match: ['trips-and-documents', 'add-new-trip'], resource: 'billing' },
-      { id: 'tripmgmt-customers', label: 'Customers', icon: Building2, path: '/customers', match: ['/customers'], resource: 'customers' },
-      { id: 'tripmgmt-routes', label: 'Trip Routes', icon: Route, path: '/trip-routes', match: ['/trip-routes'], resource: 'tracking' },
+      { id: 'tracking-live', label: 'Live Tracking', icon: MapPin, path: '/live-tracking', match: ['/live-tracking'], resource: 'tracking' },
+      { id: 'tracking-routes', label: 'Trip Routes', icon: Route, path: '/trip-routes', match: ['/trip-routes'], resource: 'tracking' },
+      { id: 'tracking-alerts', label: 'Alerts & Geofences', icon: BellRing, path: '/alerts', match: ['/alerts'], resource: 'tracking' },
     ],
   },
-  { id: 'ledger', label: 'Daily Ledger', icon: Calendar, path: '/daily-ledger', match: ['daily-ledger', 'add-ledger-entry'], resource: 'ledger' },
+  // Trips: the operational trip (lifecycle, POD, settlement) leads; the LR /
+  // invoice paperwork and the customer master sit beside it.
+  {
+    id: 'tripmgmt',
+    label: 'Trips',
+    icon: ClipboardList,
+    path: '/trips',
+    match: ['/trips$', '/trips/', 'trips-and-documents', 'add-new-trip', '/customers'],
+    children: [
+      { id: 'tripmgmt-trips', label: 'Trips', icon: ClipboardList, path: '/trips', match: ['/trips$', '/trips/'], resource: 'trips' },
+      { id: 'trips', label: 'LR & Documents', icon: FileText, path: '/trips-and-documents', match: ['trips-and-documents', 'add-new-trip'], resource: 'billing' },
+      { id: 'tripmgmt-customers', label: 'Customers', icon: Building2, path: '/customers', match: ['/customers'], resource: 'customers' },
+    ],
+  },
   {
     id: 'fleet',
-    label: 'Fleet Management',
+    label: 'Fleet',
     icon: Truck,
     path: '/fleet-and-drivers',
     match: ['fleet-and-drivers', 'add-new-truck', 'drivers', 'add-new-driver', '/fuel'],
@@ -84,7 +95,7 @@ const CLIENT_NAV_ITEMS = [
   // component masters — not another register hanging off the vehicle.
   //
   // The parent lands on the dashboard, which is the screen that answers "what
-  // needs doing"; the children are the registers behind it. All five share the
+  // needs doing"; the children are the registers behind it. All share the
   // `maintenance` resource, so a seat without it sees none of them.
   {
     id: 'maintenance',
@@ -101,7 +112,34 @@ const CLIENT_NAV_ITEMS = [
       { id: 'maint-batteries', label: 'Batteries', icon: BatteryCharging, path: '/maintenance/batteries', match: ['/maintenance/batteries'], resource: 'maintenance' },
     ],
   },
-  { id: 'settings', label: 'Settings', icon: Settings, path: '/settings', match: ['settings'] },
+  // Finance: the P&L and profitability, the receivables and payables, and the
+  // daily cash book they partly read from.
+  {
+    id: 'finance',
+    label: 'Finance',
+    icon: IndianRupee,
+    path: '/finance',
+    match: ['/finance', '/invoices', '/vendors', 'daily-ledger', 'add-ledger-entry'],
+    children: [
+      { id: 'finance-pnl', label: 'Finance & Profit', icon: LineChart, path: '/finance', match: ['/finance'], resource: 'ledger' },
+      { id: 'finance-invoices', label: 'Invoices & Payments', icon: Receipt, path: '/invoices', match: ['/invoices'], resource: 'billing' },
+      { id: 'finance-vendors', label: 'Vendors & Bills', icon: Store, path: '/vendors', match: ['/vendors'], resource: 'ledger' },
+      { id: 'ledger', label: 'Daily Ledger', icon: Calendar, path: '/daily-ledger', match: ['daily-ledger', 'add-ledger-entry'], resource: 'ledger' },
+    ],
+  },
+  { id: 'reports', label: 'Reports', icon: FileBarChart, path: '/reports', match: ['/reports'], resource: 'reports' },
+  {
+    id: 'settings-group',
+    label: 'Settings',
+    icon: Settings,
+    path: '/settings',
+    match: ['settings', '/integrations'],
+    children: [
+      { id: 'settings', label: 'Company & Users', icon: Settings, path: '/settings', match: ['settings'] },
+      // Webhooks send the account's data elsewhere — the account owner's call.
+      { id: 'integrations', label: 'Integrations', icon: Plug, path: '/integrations', match: ['/integrations'], adminOnly: true },
+    ],
+  },
 ];
 
 // Superadmin-only: platform-wide views, replacing the per-client nav entirely.
@@ -151,7 +189,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
   const [openSubmenu, setOpenSubmenu] = useState(null);
   const navigate = useNavigate();
   const { user, logout, isSuperAdmin } = useAuth();
-  const { canAccess } = usePermissions();
+  const { canAccess, isAccountOwner, role } = usePermissions();
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -211,7 +249,10 @@ export function Topbar({ activeMenu, onMenuChange }) {
   // Hide what the seat cannot reach, at both levels: a child is dropped when its
   // own resource is ungranted, and a parent is dropped once nothing is left
   // under it (or its own resource is ungranted).
-  const visible = (item) => !item.resource || canAccess(item.resource);
+  const visible = (item) =>
+    (!item.resource || canAccess(item.resource)) &&
+    (!item.adminOnly || isAccountOwner) &&
+    (!item.driverOnly || role === 'driver');
   const navItems = (isSuperAdmin ? SUPERADMIN_NAV_ITEMS : CLIENT_NAV_ITEMS)
     .filter(visible)
     .map((item) =>
@@ -282,7 +323,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
             </div>
 
             {/* Desktop Menu */}
-            <div className="hidden md:flex items-center gap-1">
+            <div className="hidden xl:flex items-center gap-1">
               {menuItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = effectiveActive === item.id;
@@ -393,7 +434,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
 
               {/* Notification Dropdown */}
               {isNotificationOpen && (
-                <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-slate-200 max-h-96 overflow-y-auto z-[2100]">
+                <div className="absolute right-0 mt-2 w-[min(24rem,calc(100vw-2rem))] bg-white rounded-lg shadow-lg border border-slate-200 max-h-96 overflow-y-auto z-[2100]">
                   <div className="p-4 border-b border-slate-200 flex justify-between items-center">
                     <h3 className="text-sm font-semibold text-slate-900">Notification</h3>
                     {unreadCount > 0 && (
@@ -405,6 +446,18 @@ export function Topbar({ activeMenu, onMenuChange }) {
 
                   {notifications.length === 0 && (
                     <p className="p-4 text-sm text-slate-500">No notifications yet.</p>
+                  )}
+
+                  {canAccess('tracking') && (
+                    <button
+                      onClick={() => {
+                        setIsNotificationOpen(false);
+                        navigate('/alerts');
+                      }}
+                      className="w-full px-4 py-2 text-xs font-medium text-blue-600 hover:bg-slate-50 border-b border-slate-200 text-left"
+                    >
+                      View all alerts and set up geofences →
+                    </button>
                   )}
 
                   <div className="divide-y divide-slate-200">
@@ -420,7 +473,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
                           <div className="flex-shrink-0">
                             {notif.type === 'alert' ? (
                               <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-bold ${
-                                notif.severity === 'critical' ? 'bg-red-500' : 'bg-yellow-500'
+                                notif.severity === 'critical' ? 'bg-red-500' : notif.severity === 'info' ? 'bg-blue-500' : 'bg-yellow-500'
                               }`}>!</div>
                             ) : (
                               <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold">i</div>
@@ -498,7 +551,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
             {/* Mobile Menu Button */}
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="md:hidden p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              className="xl:hidden p-2 hover:bg-slate-100 rounded-lg transition-colors"
             >
               {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -507,7 +560,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
 
         {/* Mobile Menu */}
         {isMenuOpen && (
-          <div className="md:hidden border-t border-slate-200 bg-slate-50">
+          <div className="xl:hidden border-t border-slate-200 bg-slate-50">
             <div className="px-4 py-2 space-y-1">
               {menuItems.map((item) => {
                 const Icon = item.icon;

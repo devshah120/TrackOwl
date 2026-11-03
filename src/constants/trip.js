@@ -39,6 +39,8 @@ export const TRIP_STATUS_LABELS = {
   unloading: 'Unloading',
   delivered: 'Delivered',
   completed: 'Completed',
+  pending_settlement: 'Pending Settlement',
+  closed: 'Closed',
   cancelled: 'Cancelled',
   on_hold: 'On Hold',
 };
@@ -65,6 +67,8 @@ export const TRIP_STATUS_COLORS = {
   unloading: 'bg-indigo-100 text-indigo-800',
   delivered: 'bg-green-100 text-green-800',
   completed: 'bg-green-100 text-green-800',
+  pending_settlement: 'bg-amber-100 text-amber-800',
+  closed: 'bg-emerald-100 text-emerald-800',
   cancelled: 'bg-red-100 text-red-800',
   on_hold: 'bg-amber-100 text-amber-800',
 };
@@ -81,7 +85,11 @@ export const ACTIVE_STATUSES = [
   'unloading',
 ];
 
-export const TERMINAL_STATUSES = ['completed', 'cancelled'];
+// Locked: no further edits. Completed and Pending Settlement stay editable so
+// actual expenses, advances and the POD can be finalised before closing.
+export const TERMINAL_STATUSES = ['closed', 'cancelled'];
+
+export const SETTLEMENT_STATUSES = ['completed', 'pending_settlement'];
 
 export const STOP_TYPE_LABELS = {
   pickup: 'Pickup',

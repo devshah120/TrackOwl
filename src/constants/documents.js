@@ -15,6 +15,7 @@ export const VEHICLE_DOCUMENT_TYPES = [
   'Fitness',
   'Permit',
   'Tax',
+  'FASTag',
   'Other',
 ];
 
@@ -25,6 +26,7 @@ export const VEHICLE_DOCUMENT_LABELS = {
   Fitness: 'Fitness Certificate',
   Permit: 'Permit',
   Tax: 'Road Tax',
+  FASTag: 'FASTag',
   Other: 'Other',
 };
 

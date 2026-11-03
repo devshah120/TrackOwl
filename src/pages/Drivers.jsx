@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Search, Edit2, Trash2, Filter, Phone, UserRound, ShieldAlert } from 'lucide-react';
 import { Topbar } from '../components/Topbar';
 import { usePermissions } from '../hooks/usePermissions';
-import { drivers as driversApi } from '../services/api';
+import { drivers as driversApi, driverInsights } from '../services/api';
 import {
   DRIVER_STATUSES,
   getDriverStatusColor,
@@ -21,6 +21,9 @@ export function Drivers() {
   const { can } = usePermissions();
 
   const [drivers, setDrivers] = useState([]);
+  // Trips, km and pending balance per driver, keyed by driver id. Loaded on its
+  // own so the roster still renders for a seat without trip access.
+  const [summary, setSummary] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -33,6 +36,7 @@ export function Drivers() {
       try {
         const res = await driversApi.list();
         if (!cancelled) setDrivers(res.drivers || []);
+        driverInsights.summary().then((r) => !cancelled && setSummary(r.summary || {})).catch(() => {});
       } catch (err) {
         if (!cancelled) setError(err.message || 'Failed to load drivers');
       } finally {
@@ -195,6 +199,9 @@ export function Drivers() {
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Salary</th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Emergency Contact</th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Assigned Truck</th>
+                      <th className="px-6 py-3 text-right text-sm font-semibold text-slate-900">Trips</th>
+                      <th className="px-6 py-3 text-right text-sm font-semibold text-slate-900">KM</th>
+                      <th className="px-6 py-3 text-right text-sm font-semibold text-slate-900">Pending</th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Status</th>
                       <th className="px-6 py-3 text-left text-sm font-semibold text-slate-900">Actions</th>
                     </tr>
@@ -206,7 +213,9 @@ export function Drivers() {
                       return (
                         <tr key={id} className="hover:bg-slate-50 transition-colors align-top">
                           <td className="px-6 py-4 text-sm font-medium text-slate-900">
-                            {driver.name}
+                            <button type="button" onClick={() => navigate(`/drivers/${id}/profile`)} className="text-blue-700 hover:underline text-left">
+                              {driver.name}
+                            </button>
                             {driver.isPrimary && driver.truck && (
                               <span className="ml-2 px-1.5 py-0.5 text-[10px] font-medium bg-blue-100 text-blue-700 rounded">
                                 Primary
@@ -256,6 +265,11 @@ export function Drivers() {
                             ) : (
                               <span className="text-slate-400">Unassigned</span>
                             )}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-right tabular-nums">{summary[id]?.trips ?? 0}</td>
+                          <td className="px-6 py-4 text-sm text-right tabular-nums">{(summary[id]?.km ?? 0).toLocaleString('en-IN')}</td>
+                          <td className={`px-6 py-4 text-sm text-right tabular-nums ${summary[id]?.pendingBalance > 0 ? 'text-red-600 font-semibold' : 'text-slate-700'}`}>
+                            ₹{(summary[id]?.pendingBalance ?? 0).toLocaleString('en-IN')}
                           </td>
                           <td className="px-6 py-4 text-sm">
                             <div className="flex items-center gap-2">

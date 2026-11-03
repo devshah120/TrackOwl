@@ -1124,6 +1124,148 @@ export const components = {
 
 export const publicTrip = (token) => apiCall(`/trips/public/${token}`);
 
+// Fetches a token-protected file (PDF, CSV) and hands it to the browser as a
+// download. Same reason as billing.downloadDocument: a plain navigation cannot
+// send the Authorization header.
+export const downloadFile = async (endpoint, fallbackName = 'download') => {
+  const token = localStorage.getItem('auth_token');
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw { status: response.status, message: err.error || 'Download failed' };
+  }
+  const blob = await response.blob();
+  const match = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') || '');
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = match ? match[1] : fallbackName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
+
+// Trip settlement: driver money, odometer corrections, review and close.
+export const tripSettlement = {
+  get: (id) => apiCall(`/trip-orders/${id}/settlement`),
+  addDriverMoney: (id, payload) =>
+    apiCall(`/trip-orders/${id}/driver-money`, { method: 'POST', body: JSON.stringify(payload) }),
+  removeDriverMoney: (id, lineId) =>
+    apiCall(`/trip-orders/${id}/driver-money/${lineId}`, { method: 'DELETE' }),
+  correctReadings: (id, payload) =>
+    apiCall(`/trip-orders/${id}/readings`, { method: 'PUT', body: JSON.stringify(payload) }),
+  review: (id, notes) =>
+    apiCall(`/trip-orders/${id}/settlement/review`, { method: 'POST', body: JSON.stringify({ notes }) }),
+  close: (id, payload = {}) =>
+    apiCall(`/trip-orders/${id}/close`, { method: 'POST', body: JSON.stringify(payload) }),
+};
+
+// The driver app: what a Driver seat records from the road.
+export const driverApp = {
+  addExpense: (id, payload) =>
+    apiCall(`/trip-orders/${id}/driver-expenses`, { method: 'POST', body: JSON.stringify(payload) }),
+};
+
+// Outbound webhooks (Company Admin).
+export const integrations = {
+  options: () => apiCall('/integrations/webhooks/options'),
+  list: () => apiCall('/integrations/webhooks'),
+  create: (payload) => apiCall('/integrations/webhooks', { method: 'POST', body: JSON.stringify(payload) }),
+  update: (id, payload) => apiCall(`/integrations/webhooks/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  remove: (id) => apiCall(`/integrations/webhooks/${id}`, { method: 'DELETE' }),
+  test: (id) => apiCall(`/integrations/webhooks/${id}/test`, { method: 'POST' }),
+};
+
+// Driver roster totals and the full driver profile.
+export const driverInsights = {
+  summary: () => apiCall('/drivers/summary'),
+  profile: (id) => apiCall(`/drivers/${id}/profile`),
+  // The incident & violation register for one driver.
+  addIncident: (id, payload) => apiCall(`/drivers/${id}/incidents`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateIncident: (id, incidentId, payload) =>
+    apiCall(`/drivers/${id}/incidents/${incidentId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  removeIncident: (id, incidentId) => apiCall(`/drivers/${id}/incidents/${incidentId}`, { method: 'DELETE' }),
+  incidentAttachment: (id, incidentId) => apiCall(`/drivers/${id}/incidents/${incidentId}/attachment`),
+};
+
+// Alerts & Notifications: alert history, GPS alert settings and geofences.
+export const alerts = {
+  options: () => apiCall('/alerts/options'),
+  list: (filters = {}) => apiCall(`/alerts${toQuery(filters)}`),
+  acknowledge: (id) => apiCall(`/alerts/${id}/acknowledge`, { method: 'POST' }),
+  settings: () => apiCall('/alerts/settings'),
+  saveSettings: (payload) => apiCall('/alerts/settings', { method: 'PUT', body: JSON.stringify(payload) }),
+  geofences: () => apiCall('/alerts/geofences'),
+  createGeofence: (payload) => apiCall('/alerts/geofences', { method: 'POST', body: JSON.stringify(payload) }),
+  updateGeofence: (id, payload) =>
+    apiCall(`/alerts/geofences/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  removeGeofence: (id) => apiCall(`/alerts/geofences/${id}`, { method: 'DELETE' }),
+};
+
+// Invoices & Payments — the receivables ledger.
+export const invoices = {
+  options: () => apiCall('/invoices/options'),
+  saveSettings: (payload) => apiCall('/invoices/settings', { method: 'PUT', body: JSON.stringify(payload) }),
+  list: (filters = {}) => apiCall(`/invoices${toQuery(filters)}`),
+  get: (id) => apiCall(`/invoices/${id}`),
+  billableTrips: (customer) => apiCall(`/invoices/billable-trips${toQuery({ customer })}`),
+  ageing: () => apiCall('/invoices/ageing'),
+  create: (payload) => apiCall('/invoices', { method: 'POST', body: JSON.stringify(payload) }),
+  update: (id, payload) => apiCall(`/invoices/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  issue: (id) => apiCall(`/invoices/${id}/issue`, { method: 'POST' }),
+  cancel: (id, reason) => apiCall(`/invoices/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  remove: (id) => apiCall(`/invoices/${id}`, { method: 'DELETE' }),
+  addPayment: (id, payload) =>
+    apiCall(`/invoices/${id}/payments`, { method: 'POST', body: JSON.stringify(payload) }),
+  removePayment: (id, paymentId) => apiCall(`/invoices/${id}/payments/${paymentId}`, { method: 'DELETE' }),
+  receipt: (id, paymentId) => apiCall(`/invoices/${id}/payments/${paymentId}/receipt`),
+  addAdjustment: (id, payload) =>
+    apiCall(`/invoices/${id}/adjustments`, { method: 'POST', body: JSON.stringify(payload) }),
+  removeAdjustment: (id, adjId) => apiCall(`/invoices/${id}/adjustments/${adjId}`, { method: 'DELETE' }),
+  downloadPdf: (id) => downloadFile(`/invoices/${id}/pdf`, 'invoice.pdf'),
+};
+
+// Vendors and vendor bills — the payables side.
+export const vendors = {
+  options: () => apiCall('/vendors/options'),
+  list: (filters = {}) => apiCall(`/vendors${toQuery(filters)}`),
+  get: (id) => apiCall(`/vendors/${id}`),
+  create: (payload) => apiCall('/vendors', { method: 'POST', body: JSON.stringify(payload) }),
+  update: (id, payload) => apiCall(`/vendors/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  remove: (id) => apiCall(`/vendors/${id}`, { method: 'DELETE' }),
+  bills: (filters = {}) => apiCall(`/vendors/bills${toQuery(filters)}`),
+  createBill: (payload) => apiCall('/vendors/bills', { method: 'POST', body: JSON.stringify(payload) }),
+  updateBill: (id, payload) => apiCall(`/vendors/bills/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  removeBill: (id) => apiCall(`/vendors/bills/${id}`, { method: 'DELETE' }),
+  payBill: (id, payload) =>
+    apiCall(`/vendors/bills/${id}/payments`, { method: 'POST', body: JSON.stringify(payload) }),
+  removeBillPayment: (id, paymentId) => apiCall(`/vendors/bills/${id}/payments/${paymentId}`, { method: 'DELETE' }),
+  billAttachment: (id) => apiCall(`/vendors/bills/${id}/attachment`),
+};
+
+// Finance & Expenses, and the business dashboard.
+export const finance = {
+  dashboard: (months = 6) => apiCall(`/finance/dashboard${toQuery({ months })}`),
+  pnl: (range = {}) => apiCall(`/finance/pnl${toQuery(range)}`),
+  trend: (months = 6) => apiCall(`/finance/trend${toQuery({ months })}`),
+  vehicles: (range = {}) => apiCall(`/finance/vehicles${toQuery(range)}`),
+  trips: (range = {}) => apiCall(`/finance/trips${toQuery(range)}`),
+  positions: () => apiCall('/finance/positions'),
+  cashflow: (range = {}) => apiCall(`/finance/cashflow${toQuery(range)}`),
+};
+
+// Reports — one endpoint per report, rendered as JSON, CSV or PDF from the
+// same builder so an export always matches the screen.
+export const reports = {
+  list: () => apiCall('/reports'),
+  run: (key, filters = {}) => apiCall(`/reports/${key}${toQuery(filters)}`),
+  download: (key, filters = {}, format = 'csv') =>
+    downloadFile(`/reports/${key}${toQuery({ ...filters, format })}`, `${key}.${format}`),
+};
+
 export const setAuthToken = (token) => {
   if (token) {
     localStorage.setItem('auth_token', token);

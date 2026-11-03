@@ -46,7 +46,9 @@ export function Login({ onBackHome }) {
       }));
 
       setTimeout(() => {
-        navigate(response.user.role === 'superadmin' ? '/admin/overview' : '/dashboard');
+        // A Driver seat lands on the phone-first driver app, not the office dashboard.
+        const home = response.user.role === 'superadmin' ? '/admin/overview' : response.user.role === 'driver' ? '/driver' : '/dashboard';
+        navigate(home);
       }, 700);
     } catch (err) {
       showAlert(err.message || 'Login failed. Please try again.', 'error');

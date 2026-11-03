@@ -156,6 +156,11 @@ function UserModal({ existing, onClose, onSaved }) {
             </select>
             <p className="mt-2 rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-xs text-slate-600">
               {ROLE_DESCRIPTIONS[form.role]}
+              {form.role === 'driver' && (
+                <span className="block mt-1 text-slate-500">
+                  The login is linked to the driver profile with the same mobile number, and sees only that driver&apos;s trips.
+                </span>
+              )}
             </p>
           </div>
 

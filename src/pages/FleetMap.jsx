@@ -105,7 +105,11 @@ export function FleetMap() {
     ['Speed', `${Math.round(selected.lastPosition?.speed || 0)} km/h`],
     ['Ignition', selected.lastPosition?.ignition ? 'On' : 'Off'],
     ['Status', selected.status],
-    ['Last seen', timeAgo(selected.lastSeenAt)],
+    // Two different clocks: when the unit last talked to the server, and when
+    // the position shown was actually fixed. A unit sending only rejected or
+    // buffered packets is "seen" but its position is old — say so.
+    ['Last communication', timeAgo(selected.lastSeenAt)],
+    ['Position time', timeAgo(selected.lastPosition?.fixTime)],
   ];
 
   return (

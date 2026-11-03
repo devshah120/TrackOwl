@@ -303,11 +303,24 @@ export function AddLedgerEntry() {
                 onChange={handleInputChange}
                 className="w-full px-4 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option>Fuel</option>
-                <option>Toll</option>
-                <option>Salary</option>
-                <option>Maintenance</option>
-                <option>Trip</option>
+                <optgroup label="Operations">
+                  <option>Fuel</option>
+                  <option>Toll</option>
+                  <option>Maintenance</option>
+                  <option>Trip</option>
+                </optgroup>
+                <optgroup label="Overheads">
+                  <option>Salary</option>
+                  <option>Office</option>
+                  <option>Insurance</option>
+                  <option>Permit &amp; Tax</option>
+                </optgroup>
+                <optgroup label="Finance & accounting">
+                  <option>EMI Principal</option>
+                  <option>EMI Interest</option>
+                  <option>Depreciation</option>
+                  <option>GST</option>
+                </optgroup>
                 <option>Other</option>
               </select>
             </div>

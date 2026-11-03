@@ -12,7 +12,9 @@ import { TRIP_DOCUMENT_TYPE_LABELS, formatDateTime } from '../../constants/trip'
 // none of which is needed to show a table of filenames. Each file is fetched
 // when someone actually opens it, the same way vehicle and driver documents
 // already work in this app.
-export function TripDocumentsTab({ trip, reload, canEdit }) {
+// A Driver seat can upload (`canEdit`) but removing a document is the office's
+// call (`canRemove`).
+export function TripDocumentsTab({ trip, reload, canEdit, canRemove = canEdit }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [draft, setDraft] = useState({ docType: 'other', title: '', documentNumber: '' });
@@ -202,7 +204,7 @@ export function TripDocumentsTab({ trip, reload, canEdit }) {
                       >
                         <Download className="w-4 h-4" />
                       </button>
-                      {canEdit && (
+                      {canRemove && (
                         <button
                           onClick={() => remove(doc._id)}
                           className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"

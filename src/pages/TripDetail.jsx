@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Edit2, Play, Square, AlertTriangle, CheckCircle2, XCircle,
   PauseCircle, Truck, MapPin, Package, IndianRupee, TrendingUp, Navigation,
-  Bell, ClipboardCheck, FileSignature, Paperclip, History, LayoutGrid,
+  Bell, ClipboardCheck, FileSignature, Paperclip, History, LayoutGrid, Scale,
 } from 'lucide-react';
 import { Topbar } from '../components/Topbar';
 import { usePermissions } from '../hooks/usePermissions';
@@ -25,6 +25,8 @@ import { TripPodTab } from '../components/trip/TripPodTab';
 import { TripDocumentsTab } from '../components/trip/TripDocumentsTab';
 import { TripActivityTab } from '../components/trip/TripActivityTab';
 import { StartEndTripModal } from '../components/trip/StartEndTripModal';
+import { TripSettlementTab } from '../components/trip/TripSettlementTab';
+import { ROLES } from '../constants/roles';
 
 // The trip detail page — everything about one job, in tabs.
 //
@@ -40,6 +42,7 @@ const TABS = [
   { id: 'cargo', label: 'Cargo', icon: Package },
   { id: 'money', label: 'Revenue & Expenses', icon: IndianRupee },
   { id: 'profitability', label: 'Profitability', icon: TrendingUp },
+  { id: 'settlement', label: 'Settlement', icon: Scale },
   { id: 'tracking', label: 'Tracking', icon: Navigation },
   { id: 'events', label: 'Events', icon: Bell },
   { id: 'checklist', label: 'Dispatch Checklist', icon: ClipboardCheck },
@@ -51,7 +54,7 @@ const TABS = [
 export function TripDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const { can } = usePermissions();
+  const { can, role } = usePermissions();
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -82,6 +85,11 @@ export function TripDetail() {
 
   const trip = data?.trip;
   const canEdit = can('trips', 'update') && trip && !TERMINAL_STATUSES.includes(trip.status);
+  // A Driver seat may record what only the person on the truck can — start
+  // and end readings, stop arrivals, POD, photos, incidents — on its own
+  // assigned trip (the server scopes and enforces this), but not the money,
+  // route or assignment.
+  const canFieldUpdate = Boolean(trip) && !TERMINAL_STATUSES.includes(trip.status) && (can('trips', 'update') || role === ROLES.DRIVER);
 
   const changeStatus = async (status, reason = '') => {
     setBusy(true);
@@ -145,7 +153,7 @@ export function TripDetail() {
     if (allowed.includes('assigned')) actions.push({ label: 'Mark Assigned', status: 'assigned', icon: CheckCircle2, style: 'secondary' });
     if (allowed.includes('ready')) actions.push({ label: 'Mark Ready', status: 'ready', icon: CheckCircle2, style: 'secondary' });
     if (allowed.includes('dispatched')) actions.push({ label: 'Dispatch', status: 'dispatched', icon: Truck, style: 'primary' });
-    if (allowed.includes('completed')) actions.push({ label: 'Complete Trip', status: 'completed', icon: CheckCircle2, style: 'primary' });
+    if (allowed.includes('completed') && trip.status === 'delivered') actions.push({ label: 'Complete Trip', status: 'completed', icon: CheckCircle2, style: 'primary' });
   }
 
   return (
@@ -202,7 +210,17 @@ export function TripDetail() {
               {/* Start and End are separate from the status buttons: they
                   capture odometer and fuel readings, which is a form, not a
                   one-click transition. */}
-              {canEdit && !trip.start?.at && ['ready', 'dispatched'].includes(trip.status) && (
+              {canEdit && ['completed', 'pending_settlement'].includes(trip.status) && (
+                <button
+                  onClick={() => setActiveTab('settlement')}
+                  className="flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+                >
+                  <Scale className="w-4 h-4" />
+                  Settle & Close
+                </button>
+              )}
+
+              {canFieldUpdate && !trip.start?.at && ['ready', 'dispatched'].includes(trip.status) && (
                 <button
                   onClick={() => setStartEndMode('start')}
                   className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -211,7 +229,7 @@ export function TripDetail() {
                   Start Trip
                 </button>
               )}
-              {canEdit && isRunning && (
+              {canFieldUpdate && isRunning && (
                 <button
                   onClick={() => setStartEndMode('end')}
                   className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -367,20 +385,21 @@ export function TripDetail() {
             {activeTab === 'assignment' && (
               <TripAssignmentTab trip={trip} reload={load} canEdit={canEdit} />
             )}
-            {activeTab === 'stops' && <TripStopsTab trip={trip} reload={load} canEdit={canEdit} />}
+            {activeTab === 'stops' && <TripStopsTab trip={trip} reload={load} canEdit={canEdit} canRecord={canFieldUpdate} />}
             {activeTab === 'cargo' && <TripCargoTab trip={trip} reload={load} canEdit={canEdit} />}
             {activeTab === 'money' && <TripMoneyTab trip={trip} reload={load} canEdit={canEdit} />}
             {activeTab === 'profitability' && <TripProfitabilityTab data={data} />}
+            {activeTab === 'settlement' && <TripSettlementTab trip={trip} reload={load} canEdit={canEdit} />}
             {activeTab === 'tracking' && <TripTrackingTab tripId={id} />}
-            {activeTab === 'events' && <TripEventsTab trip={trip} reload={load} canEdit={can('trips', 'update')} />}
+            {activeTab === 'events' && <TripEventsTab trip={trip} reload={load} canEdit={canFieldUpdate} />}
             {activeTab === 'checklist' && (
               <TripChecklistTab trip={trip} reload={load} canEdit={canEdit} />
             )}
             {activeTab === 'pod' && (
-              <TripPodTab trip={trip} data={data} reload={load} canEdit={can('trips', 'update')} />
+              <TripPodTab trip={trip} data={data} reload={load} canEdit={canFieldUpdate} />
             )}
             {activeTab === 'documents' && (
-              <TripDocumentsTab trip={trip} reload={load} canEdit={can('trips', 'update')} />
+              <TripDocumentsTab trip={trip} reload={load} canEdit={canFieldUpdate} canRemove={canEdit} />
             )}
             {activeTab === 'activity' && <TripActivityTab tripId={id} />}
           </div>

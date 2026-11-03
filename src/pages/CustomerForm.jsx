@@ -29,6 +29,9 @@ export function CustomerForm() {
   });
   const [summary, setSummary] = useState(null);
   const [recentTrips, setRecentTrips] = useState([]);
+  // Receivable position and invoice history; null for a seat without billing.
+  const [account, setAccount] = useState(null);
+  const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -58,6 +61,8 @@ export function CustomerForm() {
         });
         setSummary(res.summary);
         setRecentTrips(res.recentTrips || []);
+        setAccount(res.account || null);
+        setInvoices(res.invoices || []);
       } catch (err) {
         if (!cancelled) setError(err.message || 'Failed to load the customer');
       } finally {
@@ -158,6 +163,10 @@ export function CustomerForm() {
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
               {error}
             </div>
+          )}
+
+          {isEdit && summary && (
+            <CustomerAccount summary={summary} account={account} invoices={invoices} onInvoice={(invId) => navigate(`/invoices/${invId}`)} />
           )}
 
           <Section icon={Building2} title="Identity">
@@ -568,6 +577,74 @@ function AddressFields({ value, onChange, disabled }) {
           />
         </Field>
       </div>
+    </div>
+  );
+}
+
+// The customer's relationship at a glance (brief §9.1): trips, revenue,
+// what has been invoiced and received, what is outstanding, and the invoices.
+function CustomerAccount({ summary, account, invoices, onInvoice }) {
+  const inr = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+  const tiles = [
+    { label: 'Trips', value: summary.tripCount },
+    { label: 'Trip revenue (ex-GST)', value: inr(summary.tripRevenue) },
+    ...(account
+      ? [
+          { label: 'Invoiced', value: inr(account.invoiced), hint: `${account.invoiceCount} invoice(s)` },
+          { label: 'Received', value: inr(account.received + account.adjusted), hint: account.adjusted ? `incl. ${inr(account.adjusted)} credit notes / TDS` : null },
+          {
+            label: 'Outstanding',
+            value: inr(account.outstanding),
+            tone: account.overCreditLimit ? 'bad' : null,
+            hint: account.creditLimit != null ? `Credit limit ${inr(account.creditLimit)}${account.overCreditLimit ? ' — exceeded' : ''}` : null,
+          },
+          { label: 'Overdue', value: inr(account.overdue), tone: account.overdue ? 'bad' : null, hint: `${account.overdueCount} invoice(s)` },
+        ]
+      : []),
+  ];
+  return (
+    <div className="bg-white rounded-lg border border-slate-200 p-4 space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+        {tiles.map((t) => (
+          <div key={t.label} className="bg-slate-50 rounded-lg p-3">
+            <p className="text-xs text-slate-500">{t.label}</p>
+            <p className={`text-lg font-bold ${t.tone === 'bad' ? 'text-red-600' : 'text-slate-900'}`}>{t.value}</p>
+            {t.hint && <p className="text-xs text-slate-500">{t.hint}</p>}
+          </div>
+        ))}
+      </div>
+      {account && invoices.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-slate-500 border-b border-slate-200">
+              <tr>
+                <th className="py-2 pr-3 font-medium">Invoice</th>
+                <th className="py-2 pr-3 font-medium">Date</th>
+                <th className="py-2 pr-3 font-medium">Due</th>
+                <th className="py-2 pr-3 font-medium text-right">Amount</th>
+                <th className="py-2 pr-3 font-medium text-right">Balance</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {invoices.map((inv) => (
+                <tr key={inv._id} className="hover:bg-slate-50 cursor-pointer" onClick={() => onInvoice(inv._id)}>
+                  <td className="py-2 pr-3 text-blue-700 font-medium">
+                    {inv.invoiceNumber}
+                    {inv.status === 'draft' ? ' (draft)' : ''}
+                  </td>
+                  <td className="py-2 pr-3">{new Date(inv.invoiceDate).toLocaleDateString('en-IN')}</td>
+                  <td className={`py-2 pr-3 ${inv.overdue ? 'text-red-600 font-medium' : ''}`}>
+                    {new Date(inv.dueDate).toLocaleDateString('en-IN')}
+                    {inv.overdue ? ` · ${inv.daysOverdue}d late` : ''}
+                  </td>
+                  <td className="py-2 pr-3 text-right tabular-nums">{inr(inv.totals.total)}</td>
+                  <td className="py-2 pr-3 text-right tabular-nums font-semibold">{inr(inv.totals.balance)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

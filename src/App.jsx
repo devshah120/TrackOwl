@@ -57,6 +57,16 @@ import { AdminAddDevice } from './pages/admin/AdminAddDevice';
 import { AdminLiveTracking } from './pages/admin/AdminLiveTracking';
 import { AdminPermissions } from './pages/admin/AdminPermissions';
 import { AdminAuditLog } from './pages/admin/AdminAuditLog';
+import { Finance } from './pages/Finance';
+import { Invoices } from './pages/Invoices';
+import { InvoiceForm } from './pages/InvoiceForm';
+import { InvoiceDetail } from './pages/InvoiceDetail';
+import { Vendors } from './pages/Vendors';
+import { Reports } from './pages/Reports';
+import { Alerts } from './pages/Alerts';
+import { DriverProfile } from './pages/DriverProfile';
+import { DriverApp } from './pages/DriverApp';
+import { Integrations } from './pages/Integrations';
 
 function App() {
   const navigate = useNavigate();
@@ -432,6 +442,99 @@ function App() {
         element={
           <ProtectedRoute clientOnly resource="maintenance">
             <BatteryForm />
+          </ProtectedRoute>
+        }
+      />
+      {/* Business layer: finance, invoices, vendors, reports, alerts, and the
+          driver profile. Each is gated on the permission resource its API uses. */}
+      <Route
+        path="/finance"
+        element={
+          <ProtectedRoute clientOnly resource="ledger">
+            <Finance />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/invoices"
+        element={
+          <ProtectedRoute clientOnly resource="billing">
+            <Invoices />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/invoices/new"
+        element={
+          <ProtectedRoute clientOnly resource="billing">
+            <InvoiceForm />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/invoices/:id/edit"
+        element={
+          <ProtectedRoute clientOnly resource="billing">
+            <InvoiceForm />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/invoices/:id"
+        element={
+          <ProtectedRoute clientOnly resource="billing">
+            <InvoiceDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/vendors"
+        element={
+          <ProtectedRoute clientOnly resource="ledger">
+            <Vendors />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports"
+        element={
+          <ProtectedRoute clientOnly resource="reports">
+            <Reports />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/alerts"
+        element={
+          <ProtectedRoute clientOnly resource="tracking">
+            <Alerts />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/drivers/:id/profile"
+        element={
+          <ProtectedRoute clientOnly resource="drivers">
+            <DriverProfile />
+          </ProtectedRoute>
+        }
+      />
+      {/* The driver app has no Topbar of its own chrome — it is a full-screen
+          phone layout — and is open to any seat with trip access, though it is
+          built for (and shown in the nav to) Driver seats. */}
+      <Route
+        path="/driver"
+        element={
+          <ProtectedRoute clientOnly resource="trips">
+            <DriverApp />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/integrations"
+        element={
+          <ProtectedRoute clientOnly>
+            <Integrations />
           </ProtectedRoute>
         }
       />

@@ -25,6 +25,13 @@ const emptyForm = {
   model: '',
   manufacturer: '',
   firmwareVersion: '',
+  protocol: '',
+  serverHost: '',
+  serverPort: '',
+  apn: '',
+  movingIntervalSec: '',
+  stoppedIntervalSec: '',
+  configNotes: '',
   simNumber: '',
   simIccid: '',
   simProvider: '',
@@ -46,6 +53,14 @@ const formFromDevice = (device) => ({
   model: device.model || '',
   manufacturer: device.manufacturer || '',
   firmwareVersion: device.firmwareVersion || '',
+  protocol: device.protocol || '',
+  serverHost: device.configuration?.serverHost || '',
+  serverPort: device.configuration?.serverPort ?? '',
+  apn: device.configuration?.apn || '',
+  movingIntervalSec: device.configuration?.movingIntervalSec ?? '',
+  stoppedIntervalSec: device.configuration?.stoppedIntervalSec ?? '',
+  configNotes: device.configuration?.notes || '',
+  reportedProtocol: device.reportedProtocol || '',
   simNumber: device.sim?.number || '',
   simIccid: device.sim?.iccid || '',
   simProvider: device.sim?.provider || '',
@@ -65,6 +80,15 @@ const masterPayload = (form) => ({
   model: form.model.trim(),
   manufacturer: form.manufacturer.trim(),
   firmwareVersion: form.firmwareVersion.trim(),
+  protocol: form.protocol.trim(),
+  configuration: {
+    serverHost: form.serverHost.trim(),
+    serverPort: form.serverPort === '' ? null : Number(form.serverPort),
+    apn: form.apn.trim(),
+    movingIntervalSec: form.movingIntervalSec === '' ? null : Number(form.movingIntervalSec),
+    stoppedIntervalSec: form.stoppedIntervalSec === '' ? null : Number(form.stoppedIntervalSec),
+    notes: form.configNotes.trim(),
+  },
   sim: {
     number: form.simNumber.trim(),
     iccid: form.simIccid.trim(),
@@ -442,6 +466,42 @@ export function AdminAddDevice() {
                       placeholder="03.27.07"
                       className={inputClass}
                     />
+                  </Field>
+                </div>
+              </Section>
+
+              {/* Protocol and programmed configuration (brief §10.1). The
+                  "reported" protocol is what the gateway last saw, so a unit
+                  set up for the wrong protocol shows the mismatch here. */}
+              <Section title="Protocol & configuration">
+                <div className="grid grid-cols-2 gap-4">
+                  <Field label="Protocol">
+                    <input value={form.protocol} onChange={change('protocol')} placeholder="teltonika" className={inputClass} />
+                    {form.reportedProtocol && (
+                      <p className={`text-xs mt-1 ${form.protocol && form.protocol.toLowerCase() !== form.reportedProtocol ? 'text-red-600' : 'text-slate-500'}`}>
+                        Gateway reports: {form.reportedProtocol}
+                      </p>
+                    )}
+                  </Field>
+                  <Field label="APN">
+                    <input value={form.apn} onChange={change('apn')} placeholder="airtelgprs.com" className={inputClass} />
+                  </Field>
+                  <Field label="Server host">
+                    <input value={form.serverHost} onChange={change('serverHost')} placeholder="103.212.121.139" className={inputClass} />
+                  </Field>
+                  <Field label="Server port">
+                    <input type="number" value={form.serverPort} onChange={change('serverPort')} placeholder="5027" className={inputClass} />
+                  </Field>
+                  <Field label="Interval moving (sec)">
+                    <input type="number" value={form.movingIntervalSec} onChange={change('movingIntervalSec')} placeholder="30" className={inputClass} />
+                  </Field>
+                  <Field label="Interval parked (sec)">
+                    <input type="number" value={form.stoppedIntervalSec} onChange={change('stoppedIntervalSec')} placeholder="600" className={inputClass} />
+                  </Field>
+                </div>
+                <div className="mt-4">
+                  <Field label="Configuration notes">
+                    <input value={form.configNotes} onChange={change('configNotes')} placeholder="Ignition on DIN1, overspeed 80 set on device" className={inputClass} />
                   </Field>
                 </div>
               </Section>

@@ -18,7 +18,10 @@ import { StopPodModal } from './StopPodModal';
 // sequence can never disagree with what is on screen. Stops that have already
 // been reached keep their arrival times and POD through that save; only the
 // planning fields are taken from the form.
-export function TripStopsTab({ trip, reload, canEdit }) {
+// `canEdit` covers changing the route itself (add, move, remove, edit stops),
+// which is the office's job. `canRecord` covers what happens at a stop —
+// arrive, depart, complete, POD — which a Driver seat may also do.
+export function TripStopsTab({ trip, reload, canEdit, canRecord = canEdit }) {
   const [stops, setStops] = useState(() =>
     (trip.stops || []).map((s) => ({
       _id: s._id,
@@ -346,7 +349,7 @@ export function TripStopsTab({ trip, reload, canEdit }) {
 
                 {/* Execution actions, only for a stop that has been saved —
                     there is nothing on the server to act against otherwise. */}
-                {stop._id && canEdit && (
+                {stop._id && canRecord && (
                   <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-200 flex-wrap">
                     {stop.status === 'pending' && (
                       <ActionButton icon={LogIn} onClick={() => act(stop._id, 'arrive')}>

@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, Truck, AlertCircle, Check, SatelliteDish } from 'lucide-react';
+import { SatelliteDish } from 'lucide-react';
 import { FleetMapWidget } from '../components/FleetMapWidget';
 import { FleetDashboard } from '../components/FleetDashboard';
-import { fleet, ledger, billing, tracking } from '../services/api';
+import { BusinessOverview } from '../components/BusinessOverview';
+import { fleet, billing, tracking } from '../services/api';
 import {
-  ACTIVE_STATUSES,
   VEHICLE_STATUSES,
   getStatusColor as vehicleStatusColor,
 } from '../constants/vehicle';
@@ -24,7 +24,6 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [trucksData, setTrucksData] = useState([]);
-  const [ledgerData, setLedgerData] = useState([]);
   const [billingData, setBillingData] = useState([]);
   const [devices, setDevices] = useState([]);
   // Whether this role can read the fleet list. When it can, the fleet is the
@@ -40,9 +39,10 @@ export function Dashboard() {
       // grant while a Fleet Manager cannot read billing. A single Promise.all
       // would let one expected 403 blank the whole page, so a section the
       // caller may not see simply stays empty.
-      const [fleetRes, ledgerRes, billingRes] = await Promise.allSettled([
+      // The money figures now come from BusinessOverview (/finance/dashboard);
+      // billing is still read here only for the legacy LR-bill balances.
+      const [fleetRes, billingRes] = await Promise.allSettled([
         fleet.list(),
-        ledger.list(),
         billing.list(),
       ]);
       if (cancelled) return;
@@ -51,12 +51,11 @@ export function Dashboard() {
         setTrucksData(fleetRes.value.trucks || []);
         setFleetVisible(true);
       }
-      if (ledgerRes.status === 'fulfilled') setLedgerData(ledgerRes.value.entries || []);
       if (billingRes.status === 'fulfilled') setBillingData(billingRes.value.billingTrips || []);
 
       // Only a genuine failure is worth a banner — a 403 is the role working
       // as intended, not something the user can act on.
-      const realFailure = [fleetRes, ledgerRes, billingRes].find(
+      const realFailure = [fleetRes, billingRes].find(
         (r) => r.status === 'rejected' && r.reason?.status !== 403
       );
       if (realFailure) setError(realFailure.reason?.message || 'Failed to load dashboard data');
@@ -85,52 +84,6 @@ export function Dashboard() {
       clearInterval(timer);
     };
   }, []);
-
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const todaysLedger = ledgerData.filter((e) => String(e.date).slice(0, 10) === todayStr);
-  const todaysIncome = todaysLedger.filter((e) => e.type === 'income').reduce((sum, e) => sum + e.amount, 0);
-  const todaysExpense = todaysLedger.filter((e) => e.type === 'expense').reduce((sum, e) => sum + e.amount, 0);
-  const pendingBalance = billingData
-    .filter((b) => b.status !== 'Paid')
-    .reduce((sum, b) => sum + b.amount, 0);
-  // "Active" covers both in-service states: parked-and-available counts as
-  // fleet strength, a truck in Maintenance or retired does not.
-  const activeTruckCount = trucksData.filter((t) => ACTIVE_STATUSES.includes(t.status)).length;
-
-  const stats = [
-    {
-      title: 'Active Trucks',
-      value: String(activeTruckCount),
-      subtitle: `${trucksData.length} total in fleet`,
-      icon: Truck,
-      color: 'bg-blue-100',
-      textColor: 'text-blue-600',
-    },
-    {
-      title: "Today's Income",
-      value: `₹${todaysIncome.toLocaleString()}`,
-      subtitle: 'Ledger income entries today',
-      icon: Check,
-      color: 'bg-green-100',
-      textColor: 'text-green-600',
-    },
-    {
-      title: 'Pending Balance',
-      value: `₹${pendingBalance.toLocaleString()}`,
-      subtitle: 'Outstanding billing trips',
-      icon: AlertCircle,
-      color: 'bg-yellow-100',
-      textColor: 'text-yellow-600',
-    },
-    {
-      title: 'Net Profit (Today)',
-      value: `₹${(todaysIncome - todaysExpense).toLocaleString()}`,
-      subtitle: "Today's income minus expenses",
-      icon: TrendingUp,
-      color: 'bg-purple-100',
-      textColor: 'text-purple-600',
-    },
-  ];
 
   // Every fleet truck is listed, not just the ones reporting: a truck with no
   // GPS unit fitted shows up as needing one rather than silently missing.
@@ -182,17 +135,6 @@ export function Dashboard() {
     ? selectedTruck
     : trackedTrucks[0]?.id || '';
 
-  const recentTrips = [...billingData]
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .slice(0, 5)
-    .map((b) => ({
-      id: b._id || b.id,
-      route: `${b.partyName} (${b.truck})`,
-      distance: b.bill || '—',
-      freight: `₹${b.amount.toLocaleString()}`,
-      status: b.status,
-    }));
-
   const pendingPayments = billingData
     .filter((b) => b.status !== 'Paid')
     .map((b) => ({
@@ -233,7 +175,7 @@ export function Dashboard() {
       {/* Page Title */}
       <div>
         <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-slate-600 mt-1">Welcome back! Here's your fleet overview.</p>
+        <p className="text-slate-600 mt-1">Your fleet and business at a glance.</p>
       </div>
 
       {error && (
@@ -256,22 +198,9 @@ export function Dashboard() {
         <FleetDashboard />
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <div key={stat.title} className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
-              <div className={`${stat.color} w-12 h-12 rounded-lg flex items-center justify-center mb-4`}>
-                <Icon className={`w-6 h-6 ${stat.textColor}`} />
-              </div>
-              <p className="text-slate-600 text-sm font-medium">{stat.title}</p>
-              <p className="text-2xl font-bold text-slate-900 mt-2">{stat.value}</p>
-              <p className="text-slate-500 text-xs mt-2">{stat.subtitle}</p>
-            </div>
-          );
-        })}
-      </div>
+      {/* Business overview — this month's money, the trend, trip status,
+          vehicle profitability and what needs attention. */}
+      <BusinessOverview />
 
       {/* Fleet Live Map and Truck Status */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -339,66 +268,34 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Recent Trips and Pending Payments */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Trips */}
+      {/* Balances still open on the older LR / tax-invoice paperwork. Shown
+          only while there are any, so accounts on the new invoice register do
+          not carry an empty table. */}
+      {pendingPayments.length > 0 && (
         <div>
-          <h2 className="text-xl font-bold text-slate-900 mb-4">Recent Trips</h2>
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Party / Truck</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Bill</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Freight</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentTrips.map((trip) => (
-                  <tr key={trip.id} className="border-b border-slate-200 hover:bg-slate-50">
-                    <td className="px-4 py-3 text-sm text-slate-900 font-medium">{trip.route}</td>
-                    <td className="px-4 py-3 text-sm text-slate-600">{trip.distance}</td>
-                    <td className="px-4 py-3 text-sm text-slate-900 font-semibold">{trip.freight}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-1 rounded-full font-medium ${getStatusColor(trip.status)}`}>
-                        {trip.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Pending Payments */}
-        <div>
-          <h2 className="text-xl font-bold text-slate-900 mb-4">Pending Payments</h2>
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+          <h2 className="text-xl font-bold text-slate-900 mb-4">Pending LR bills</h2>
+          <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Buyer</th>
                   <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Amount</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Days Overdue</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-900">Days since bill</th>
                 </tr>
               </thead>
               <tbody>
-                {pendingPayments.map((payment, idx) => (
+                {pendingPayments.slice(0, 10).map((payment, idx) => (
                   <tr key={idx} className="border-b border-slate-200 hover:bg-slate-50">
                     <td className="px-4 py-3 text-sm text-slate-900 font-medium">{payment.buyer}</td>
                     <td className="px-4 py-3 text-sm text-slate-900 font-semibold">{payment.amount}</td>
-                    <td className="px-4 py-3">
-                      <span className="text-sm font-medium text-red-600">{payment.daysOverdue} days</span>
-                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600">{payment.daysOverdue} days</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </div>
-      </div>
+      )}
       </>
       )}
     </div>

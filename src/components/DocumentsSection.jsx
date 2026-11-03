@@ -57,6 +57,7 @@ const emptyDraft = (defaultType) => ({
   issuedBy: '',
   issueDate: '',
   expiryDate: '',
+  reminderDays: '',
   notes: '',
   attachment: null,
 });
@@ -174,6 +175,8 @@ export const DocumentsSection = forwardRef(function DocumentsSection(
       // Sent explicitly rather than omitted so a cleared date persists.
       issueDate: draft.issueDate || null,
       expiryDate: draft.expiryDate || null,
+      // Blank = the account's reminder stages.
+      reminderDays: draft.reminderDays,
       attachment: draft.attachment,
     };
 
@@ -327,6 +330,19 @@ export const DocumentsSection = forwardRef(function DocumentsSection(
               <p className="text-xs text-slate-500 mt-1">
                 Leave blank for a document that does not expire.
               </p>
+            </div>
+            <div>
+              <label className={labelClass}>Remind (days before expiry)</label>
+              <input
+                type="text"
+                name="reminderDays"
+                placeholder="Account default, e.g. 30, 15, 7, 0"
+                value={draft.reminderDays}
+                onChange={handleDraftChange}
+                disabled={!draft.expiryDate}
+                className={inputClass}
+              />
+              <p className="text-xs text-slate-500 mt-1">Blank uses the stages under Alerts → Alert Settings.</p>
             </div>
             <div>
               <label className={labelClass}>Notes</label>
