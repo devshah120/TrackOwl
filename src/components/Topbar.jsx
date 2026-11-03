@@ -308,9 +308,10 @@ export function Topbar({ activeMenu, onMenuChange }) {
     <>
       {/* Top Navigation Bar */}
       <nav className="sticky top-0 bg-white border-b border-slate-200 shadow-sm z-[2000]">
-        <div className="px-6 py-4 flex items-center justify-between">
-          {/* Left: Logo and Desktop Menu */}
-          <div className="flex items-center gap-8">
+        <div className="px-4 2xl:px-6 py-3 flex items-center justify-between gap-3">
+          {/* Left: Logo and Desktop Menu. min-w-0 lets this side give way to the
+              actions on the right instead of pushing them off the screen. */}
+          <div className="flex items-center gap-4 2xl:gap-8 min-w-0">
             {/* Logo */}
             <div className="flex-shrink-0 flex items-center gap-2">
               <h1 className="text-2xl font-bold">
@@ -325,7 +326,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
             </div>
 
             {/* Desktop Menu */}
-            <div className="hidden xl:flex items-center gap-1">
+            <div className="hidden xl:flex items-center gap-0.5 2xl:gap-1">
               {menuItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = effectiveActive === item.id;
@@ -346,14 +347,14 @@ export function Topbar({ activeMenu, onMenuChange }) {
                         onClick={() => setOpenSubmenu(isOpen ? null : item.id)}
                         aria-expanded={isOpen}
                         aria-haspopup="true"
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                        className={`flex items-center gap-1.5 px-2.5 2xl:px-4 py-2 rounded-lg whitespace-nowrap transition-colors ${
                           isActive
                             ? 'bg-blue-50 text-blue-600 font-medium'
                             : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                         }`}
                       >
-                        <Icon className="w-4 h-4" />
-                        <span className="text-sm">{item.label}</span>
+                        <Icon className="w-4 h-4 shrink-0" />
+                        <span className="text-sm whitespace-nowrap">{item.label}</span>
                         <ChevronDown
                           className={`w-3.5 h-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`}
                         />
@@ -391,14 +392,14 @@ export function Topbar({ activeMenu, onMenuChange }) {
                   <button
                     key={item.id}
                     onClick={() => handleMenuClick(item.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                    className={`flex items-center gap-1.5 px-2.5 2xl:px-4 py-2 rounded-lg whitespace-nowrap transition-colors ${
                       isActive
                         ? 'bg-blue-50 text-blue-600 font-medium'
                         : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                     }`}
                   >
-                    <Icon className="w-4 h-4" />
-                    <span className="text-sm">{item.label}</span>
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span className="text-sm whitespace-nowrap">{item.label}</span>
                   </button>
                 );
               })}
@@ -406,7 +407,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
           </div>
 
           {/* Right: User Profile and Actions */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1 2xl:gap-4 shrink-0">
             {/* Fullscreen Button */}
             <button
               onClick={toggleFullscreen}
@@ -513,14 +514,18 @@ export function Topbar({ activeMenu, onMenuChange }) {
             <div className="relative">
               <button
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors"
+                className="flex items-center gap-2 px-2 2xl:px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors"
+                title={`${user?.name || 'User'} · ${roleLabel(user?.role)}`}
               >
                 <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
                   {user?.name?.charAt(0).toUpperCase() || 'U'}
                 </div>
-                <div className="hidden sm:block text-left">
-                  <p className="text-sm font-medium text-slate-900">{user?.name || 'User'}</p>
-                  <p className="text-xs text-slate-500">{roleLabel(user?.role)}</p>
+                {/* Name and role only on very wide screens (and on phones, where
+                    the menu is collapsed and there is room); between, the
+                    avatar carries them as a tooltip so the menu fits. */}
+                <div className="hidden sm:block xl:hidden 2xl:block text-left">
+                  <p className="text-sm font-medium text-slate-900 whitespace-nowrap">{user?.name || 'User'}</p>
+                  <p className="text-xs text-slate-500 whitespace-nowrap">{roleLabel(user?.role)}</p>
                 </div>
                 <ChevronDown className="w-4 h-4 text-slate-500" />
               </button>
