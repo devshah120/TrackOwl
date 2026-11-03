@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './Button';
-import { Check, User, Users } from 'lucide-react';
+import { Check, User, Users, Gift } from 'lucide-react';
 import { plans as plansApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -66,7 +66,9 @@ export const Pricing = () => {
   const { isAuthenticated } = useAuth();
   const [isYearly, setIsYearly] = useState(false);
   const [plans, setPlans] = useState(FALLBACK_PLANS);
-  const [trialDays, setTrialDays] = useState(14);
+  // From the server (Super Admin → Plans & Billing). Null until it answers,
+  // so the page never advertises a trial length that is not the real one.
+  const [trialDays, setTrialDays] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,7 +77,7 @@ export const Pricing = () => {
       .then((r) => {
         if (cancelled || !r.plans?.length) return;
         setPlans(r.plans);
-        setTrialDays(r.trialDays);
+        setTrialDays(Number(r.trialDays) || 0);
       })
       .catch(() => {});
     return () => {
@@ -138,8 +140,16 @@ export const Pricing = () => {
           </h2>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-8">
             Choose the perfect plan for your fleet. Always flexible, always fair.
-            {trialDays > 0 && ` Start with a ${trialDays}-day free trial.`}
           </p>
+
+          {trialDays > 0 && (
+            <div className="flex justify-center mb-6">
+              <span className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-2 rounded-full text-sm font-semibold">
+                <Gift size={18} />
+                {trialDays}-day free trial on every plan · no payment needed to start
+              </span>
+            </div>
+          )}
 
           {/* Toggle */}
           <motion.div
@@ -245,6 +255,11 @@ export const Pricing = () => {
                       ? `₹${Math.round(plan.yearlyPrice / 12).toLocaleString('en-IN')}/month billed annually`
                       : 'Billed monthly'}
                   </p>
+                  {trialDays > 0 && (
+                    <p className="text-sm font-medium text-emerald-600 mt-1 flex items-center gap-1">
+                      <Gift size={14} /> First {trialDays} days free
+                    </p>
+                  )}
                 </div>
 
                 <Button
@@ -253,7 +268,9 @@ export const Pricing = () => {
                   className="w-full mb-8"
                   onClick={() => choose(plan)}
                 >
-                  Get Started
+                  {/* A new visitor starts on the trial; a signed-in customer
+                      is choosing what to pay for. */}
+                  {!isAuthenticated && trialDays > 0 ? `Start ${trialDays}-day free trial` : 'Get Started'}
                 </Button>
 
                 <div className="space-y-4 flex-1">
