@@ -195,7 +195,7 @@ function PlanModal({ plan, onClose, onSaved }) {
 
 function SettingsTab() {
   const [s, setS] = useState(null);
-  const [ready, setReady] = useState({});
+  const [rzp, setRzp] = useState(null);
   const [reminders, setReminders] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -207,7 +207,7 @@ function SettingsTab() {
         const r = await adminBilling.settings();
         setS(r.settings);
         setReminders((r.settings.reminderDays || []).join(', '));
-        setReady({ razorpay: r.razorpayReady, webhook: r.webhookReady });
+        setRzp(r.razorpay);
       } catch (e) {
         setError(e.message);
       }
@@ -230,33 +230,117 @@ function SettingsTab() {
   };
 
   return (
-    <div className="space-y-4 max-w-2xl">
+    <div className="space-y-4 w-full">
       <Banner message={error} onDismiss={() => setError('')} />
       <Banner tone="success" message={notice} onDismiss={() => setNotice('')} />
-      <Panel title="Razorpay connection">
-        <div className="p-4 space-y-2 text-sm">
-          <p className="flex items-center gap-2">{ready.razorpay ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <AlertTriangle className="w-4 h-4 text-red-600" />} API keys {ready.razorpay ? 'set' : 'missing — set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in the backend .env'}</p>
-          <p className="flex items-center gap-2">{ready.webhook ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <AlertTriangle className="w-4 h-4 text-amber-600" />} Webhook secret {ready.webhook ? 'set' : 'missing — set RAZORPAY_WEBHOOK_SECRET (recommended, catches payments where the customer closed the tab)'}</p>
-        </div>
-      </Panel>
-      <Panel title="Trial & access">
-        <div className="p-4 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <label className="text-sm text-slate-700">Free trial (days)<input type="number" min={0} max={365} value={s.trialDays} onChange={(e) => setS({ ...s, trialDays: e.target.value })} className={inputClass} /></label>
-            <label className="text-sm text-slate-700">Grace after expiry (days)<input type="number" min={0} max={60} value={s.graceDays} onChange={(e) => setS({ ...s, graceDays: e.target.value })} className={inputClass} /></label>
+      <div className="grid gap-6 xl:grid-cols-2 items-start">
+        {rzp && <RazorpayPanel status={rzp} onChange={setRzp} onNotice={setNotice} onError={setError} />}
+        <Panel title="Trial & access">
+          <div className="p-4 space-y-4">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className="text-sm text-slate-700">Free trial (days)<input type="number" min={0} max={365} value={s.trialDays} onChange={(e) => setS({ ...s, trialDays: e.target.value })} className={inputClass} /></label>
+              <label className="text-sm text-slate-700">Grace after expiry (days)<input type="number" min={0} max={60} value={s.graceDays} onChange={(e) => setS({ ...s, graceDays: e.target.value })} className={inputClass} /></label>
+            </div>
+            <label className="text-sm text-slate-700 block">Renewal reminders (days before expiry)<input value={reminders} onChange={(e) => setReminders(e.target.value)} className={inputClass} placeholder="7, 3, 1" /></label>
+            <label className="flex items-start gap-2 text-sm text-slate-700">
+              <input type="checkbox" className="mt-1" checked={s.enforce} onChange={(e) => setS({ ...s, enforce: e.target.checked })} />
+              <span>
+                Block accounts without an active plan, and enforce plan limits
+                <span className="block text-xs text-slate-500">Untick only as an emergency switch: nobody is blocked and limits are ignored while it is off.</span>
+              </span>
+            </label>
+            <Button icon={Save} busy={busy} onClick={save}>Save settings</Button>
           </div>
-          <label className="text-sm text-slate-700 block">Renewal reminders (days before expiry)<input value={reminders} onChange={(e) => setReminders(e.target.value)} className={inputClass} placeholder="7, 3, 1" /></label>
-          <label className="flex items-start gap-2 text-sm text-slate-700">
-            <input type="checkbox" className="mt-1" checked={s.enforce} onChange={(e) => setS({ ...s, enforce: e.target.checked })} />
-            <span>
-              Block accounts without an active plan, and enforce plan limits
-              <span className="block text-xs text-slate-500">Untick only as an emergency switch: nobody is blocked and limits are ignored while it is off.</span>
-            </span>
-          </label>
-          <Button icon={Save} busy={busy} onClick={save}>Save settings</Button>
-        </div>
-      </Panel>
+        </Panel>
+      </div>
     </div>
+  );
+}
+
+// The Razorpay connection, managed here rather than in the server's .env.
+// Secrets are write-only: the panel shows that one is set (its last 4
+// characters), never the value, and a blank secret field keeps the saved one.
+function RazorpayPanel({ status, onChange, onNotice, onError }) {
+  const [form, setForm] = useState(() => ({ keyId: status.keyId || '', keySecret: '' }));
+  const [busy, setBusy] = useState(null);
+
+  const run = async (kind, fn) => {
+    setBusy(kind);
+    onError('');
+    try {
+      const r = await fn();
+      onChange(r.razorpay);
+      onNotice(r.message);
+      setForm((f) => ({ ...f, keyId: r.razorpay.keyId || '', keySecret: '' }));
+    } catch (e) {
+      onError(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const ok = (good, text) => (
+    <p className="flex items-center gap-2 text-sm">
+      {good ? <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" /> : <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />}
+      <span>{text}</span>
+    </p>
+  );
+
+  return (
+    <Panel
+      title="Razorpay connection"
+      action={
+        status.mode ? (
+          <Pill className={status.mode === 'live' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}>{status.mode === 'live' ? 'Live mode' : 'Test mode'}</Pill>
+        ) : null
+      }
+    >
+      <div className="p-4 space-y-4">
+        <div className="space-y-1.5">
+          {ok(status.configured, status.configured ? `Connected with ${status.keyId} (secret ${status.keySecretHint})${status.source === 'env' ? ' — from the server .env; save here to manage it from the panel' : ''}` : 'Not connected — enter your API keys below')}
+          {status.verifiedAt && <p className="text-xs text-slate-500 pl-6">Last checked with Razorpay {formatDateTime(status.verifiedAt)}</p>}
+          {status.unreadable && <p className="text-sm text-red-600">The saved secret can no longer be read (the server key changed). Enter it again.</p>}
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-3">
+          <label className="text-sm text-slate-700 sm:col-span-2">
+            Key Id
+            <input value={form.keyId} onChange={(e) => setForm({ ...form, keyId: e.target.value.trim() })} className={`${inputClass} font-mono`} placeholder="rzp_test_… or rzp_live_…" autoComplete="off" />
+          </label>
+          <label className="text-sm text-slate-700 sm:col-span-2">
+            Key Secret
+            <input type="password" value={form.keySecret} onChange={(e) => setForm({ ...form, keySecret: e.target.value })} className={`${inputClass} font-mono`} placeholder={status.configured ? 'Leave blank to keep the saved one' : 'From Razorpay → API Keys'} autoComplete="new-password" />
+          </label>
+        </div>
+
+        <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600 space-y-1">
+          <p>
+            <span className="font-medium text-slate-700">Where to find them:</span> Razorpay Dashboard → Account &amp; Settings → API Keys. Start with Test mode keys, switch to Live after a test payment.
+          </p>
+          <p>
+            <span className="font-medium text-slate-700">No webhook needed:</span> a payment is confirmed the moment Checkout finishes, and if a customer closes the tab first, TrackOwl checks with Razorpay every few minutes and activates the plan itself.
+          </p>
+          <p>Keys are checked with Razorpay before saving and the secret is stored encrypted — it is never shown again.</p>
+        </div>
+
+        <div className="flex gap-2 flex-wrap">
+          <Button icon={Save} busy={busy === 'save'} disabled={Boolean(busy) || !form.keyId} onClick={() => run('save', () => adminBilling.saveRazorpay(form))}>Save &amp; verify keys</Button>
+          {status.configured && (
+            <Button variant="secondary" busy={busy === 'test'} disabled={Boolean(busy)} onClick={() => run('test', () => adminBilling.testRazorpay())}>Test connection</Button>
+          )}
+          {status.source === 'panel' && (
+            <Button
+              variant="danger"
+              icon={Trash2}
+              disabled={Boolean(busy)}
+              onClick={() => window.confirm('Remove the Razorpay keys? Customers will not be able to pay until new keys are saved.') && run('remove', () => adminBilling.removeRazorpay())}
+            >
+              Remove keys
+            </Button>
+          )}
+        </div>
+      </div>
+    </Panel>
   );
 }
 

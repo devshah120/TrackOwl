@@ -1162,6 +1162,10 @@ export const adminBilling = {
   removePlan: (id) => apiCall(`/admin/billing/plans/${id}`, { method: 'DELETE' }),
   settings: () => apiCall('/admin/billing/settings'),
   saveSettings: (payload) => apiCall('/admin/billing/settings', { method: 'PUT', body: JSON.stringify(payload) }),
+  // Razorpay keys: saved (and verified) from the panel, secrets write-only.
+  saveRazorpay: (payload) => apiCall('/admin/billing/razorpay', { method: 'PUT', body: JSON.stringify(payload) }),
+  testRazorpay: () => apiCall('/admin/billing/razorpay/test', { method: 'POST' }),
+  removeRazorpay: () => apiCall('/admin/billing/razorpay', { method: 'DELETE' }),
   subscriptions: (status) => apiCall(`/admin/billing/subscriptions${toQuery({ status })}`),
   act: (owner, payload) => apiCall(`/admin/billing/subscriptions/${owner}/action`, { method: 'POST', body: JSON.stringify(payload) }),
   payments: (status) => apiCall(`/admin/billing/payments${toQuery({ status })}`),
