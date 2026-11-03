@@ -52,13 +52,16 @@ export function AdminPlans() {
 
 function PlansTab() {
   const [plans, setPlans] = useState([]);
+  const [catalog, setCatalog] = useState([]);
   const [editing, setEditing] = useState(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
   const load = useCallback(async () => {
     try {
-      setPlans((await adminBilling.plans()).plans || []);
+      const r = await adminBilling.plans();
+      setPlans(r.plans || []);
+      setCatalog(r.catalog || []);
     } catch (e) {
       setError(e.message);
     }
@@ -93,9 +96,12 @@ function PlansTab() {
             <p className="text-sm text-slate-600 mt-1">
               {p.maxVehicles ? `${p.maxVehicles} vehicles` : 'Unlimited vehicles'} · {p.maxUsers ? `${p.maxUsers} users` : 'unlimited users'} · {p.subscribers} subscriber(s)
             </p>
+            {/* Generated from the plan's limits and modules — what the
+                customer actually gets — plus any extra lines. */}
             <ul className="mt-3 text-sm text-slate-600 space-y-1 flex-1">
-              {p.features.map((f) => <li key={f}>✓ {f}</li>)}
+              {(p.displayFeatures || []).map((f) => <li key={f}>✓ {f}</li>)}
             </ul>
+            <p className="text-xs text-slate-500 mt-2">{(p.modules || []).length} of {catalog.length} modules</p>
             <div className="flex gap-2 mt-4">
               <Button variant="secondary" icon={Edit2} onClick={() => setEditing(p)}>Edit</Button>
               {!p.subscribers && (
@@ -113,6 +119,7 @@ function PlansTab() {
         <PlanModal
           key={editing._id || 'new'}
           plan={editing}
+          catalog={catalog}
           onClose={() => setEditing(null)}
           onSaved={(msg) => {
             setEditing(null);
@@ -125,7 +132,19 @@ function PlansTab() {
   );
 }
 
-function PlanModal({ plan, onClose, onSaved }) {
+// What the pricing page will list, built the same way the server builds it
+// (services/planCatalog.js displayFeatures): limits, then modules, then extras.
+const previewFeatures = (form, catalog) => {
+  const limit = (n, one, many) => (n ? `Up to ${Number(n).toLocaleString('en-IN')} ${Number(n) === 1 ? one : many}` : `Unlimited ${many}`);
+  return [
+    limit(form.maxVehicles, 'vehicle', 'vehicles'),
+    limit(form.maxUsers, 'user', 'users'),
+    ...catalog.filter((m) => form.modules.includes(m.key)).map((m) => m.label),
+    ...form.extraFeatures.split('\n').map((l) => l.trim()).filter(Boolean),
+  ];
+};
+
+function PlanModal({ plan, catalog, onClose, onSaved }) {
   const [form, setForm] = useState(() => ({
     key: plan.key || '',
     name: plan.name || '',
@@ -134,7 +153,8 @@ function PlanModal({ plan, onClose, onSaved }) {
     yearlyPrice: plan.yearlyPrice ?? '',
     maxVehicles: plan.maxVehicles ?? '',
     maxUsers: plan.maxUsers ?? '',
-    features: (plan.features || []).join('\n'),
+    modules: plan._id ? plan.modules || [] : catalog.map((m) => m.key),
+    extraFeatures: (plan.extraFeatures || []).join('\n'),
     highlight: Boolean(plan.highlight),
     active: plan.active !== false,
     sortOrder: plan.sortOrder ?? 0,
@@ -142,12 +162,14 @@ function PlanModal({ plan, onClose, onSaved }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const toggle = (key) => set('modules', form.modules.includes(key) ? form.modules.filter((m) => m !== key) : [...form.modules, key]);
+  const groups = [...new Set(catalog.map((m) => m.group))];
 
   const save = async () => {
     setBusy(true);
     setError('');
     try {
-      const payload = { ...form, features: form.features.split('\n') };
+      const payload = { ...form, extraFeatures: form.extraFeatures.split('\n') };
       if (plan._id) {
         const res = await adminBilling.updatePlan(plan._id, payload);
         onSaved(`${form.name} saved. ${res.note || ''}`);
@@ -163,7 +185,7 @@ function PlanModal({ plan, onClose, onSaved }) {
 
   return (
     <Modal open wide title={plan._id ? `Edit ${plan.name}` : 'New plan'} onClose={onClose} footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button busy={busy} icon={Save} onClick={save}>Save plan</Button></>}>
-      <div className="space-y-3">
+      <div className="space-y-4">
         <Banner message={error} />
         <div className="grid sm:grid-cols-3 gap-3">
           <label className="text-sm text-slate-700">Name<input value={form.name} onChange={(e) => set('name', e.target.value)} className={inputClass} /></label>
@@ -177,15 +199,50 @@ function PlanModal({ plan, onClose, onSaved }) {
           <label className="text-sm text-slate-700">Vehicle limit<input type="number" min={1} value={form.maxVehicles} onChange={(e) => set('maxVehicles', e.target.value)} className={inputClass} placeholder="Blank = unlimited" /></label>
           <label className="text-sm text-slate-700">User limit<input type="number" min={1} value={form.maxUsers} onChange={(e) => set('maxUsers', e.target.value)} className={inputClass} placeholder="Blank = unlimited" /></label>
         </div>
-        <label className="text-sm text-slate-700 block">
-          What&apos;s included — one per line, shown on the pricing page
-          <textarea rows={8} value={form.features} onChange={(e) => set('features', e.target.value)} className={`${inputClass} font-mono text-sm`} />
-        </label>
-        <div className="flex gap-6 text-sm text-slate-700">
+
+        <div className="grid lg:grid-cols-5 gap-4">
+          <div className="lg:col-span-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-slate-700">Modules included <span className="font-normal text-slate-500">— customers on this plan get exactly these</span></p>
+              <div className="flex gap-2 text-xs">
+                <button type="button" className="text-blue-600 hover:underline" onClick={() => set('modules', catalog.map((m) => m.key))}>All</button>
+                <button type="button" className="text-blue-600 hover:underline" onClick={() => set('modules', [])}>None</button>
+              </div>
+            </div>
+            {groups.map((group) => (
+              <div key={group}>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">{group}</p>
+                <div className="grid sm:grid-cols-2 gap-x-4 gap-y-1">
+                  {catalog.filter((m) => m.group === group).map((m) => (
+                    <label key={m.key} className="flex items-center gap-2 text-sm text-slate-700">
+                      <input type="checkbox" checked={form.modules.includes(m.key)} onChange={() => toggle(m.key)} />
+                      {m.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <p className="text-xs text-slate-500">Always included in every plan: dashboard, vehicles, drivers, customers, users, company settings and notifications.</p>
+            <label className="text-sm text-slate-700 block">
+              Extra lines for the pricing page <span className="text-slate-500">(not enforced — support level, onboarding…)</span>
+              <textarea rows={3} value={form.extraFeatures} onChange={(e) => set('extraFeatures', e.target.value)} className={`${inputClass} text-sm`} placeholder={'Priority support\nFree onboarding call'} />
+            </label>
+          </div>
+          <div className="lg:col-span-2">
+            <p className="text-sm font-medium text-slate-700 mb-1">Pricing page will show</p>
+            <ul className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-1 text-sm text-slate-700">
+              {previewFeatures(form, catalog).map((f) => (
+                <li key={f} className="flex gap-2"><span className="text-emerald-600">✓</span>{f}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <div className="flex gap-6 text-sm text-slate-700 flex-wrap">
           <label className="flex items-center gap-2"><input type="checkbox" checked={form.highlight} onChange={(e) => set('highlight', e.target.checked)} /> &quot;Most Popular&quot; badge</label>
           <label className="flex items-center gap-2"><input type="checkbox" checked={form.active} onChange={(e) => set('active', e.target.checked)} /> On sale (shown on the pricing page)</label>
         </div>
-        <p className="text-xs text-slate-500">Price and limit changes apply to existing subscribers when they next renew. The vehicle and user limits are enforced; the feature lines are descriptive.</p>
+        <p className="text-xs text-slate-500">Limits and modules apply to every subscriber of this plan as soon as you save. A price change applies from each subscriber&apos;s next payment.</p>
       </div>
     </Modal>
   );

@@ -4,6 +4,7 @@ import { Check, CreditCard, ShieldCheck, Truck, Users, Lock, Clock, Receipt } fr
 import { PageShell, PageHeader, Panel, Banner, Button, Pill, StatTile, Th, Td } from '../components/business/BusinessUI';
 import { formatCurrency, formatDate } from '../components/business/helpers';
 import { subscription as subscriptionApi } from '../services/api';
+import { refreshPlan } from '../hooks/usePlan';
 
 // Plan & Billing for the signed-in account: what plan it is on, until when,
 // how close it is to its limits, and Razorpay checkout to buy or renew.
@@ -92,6 +93,8 @@ export function Billing() {
               await subscriptionApi.verify(response);
               setNotice(`Payment received — you are on ${plan.name} (${cycle}). Thank you!`);
               await load();
+              // The new plan's modules appear in the menu straight away.
+              refreshPlan();
             } catch (err) {
               setError(err.message);
             }

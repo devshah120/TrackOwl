@@ -1149,6 +1149,8 @@ export const plans = {
 
 export const subscription = {
   get: () => apiCall('/subscription'),
+  // Status, open modules and limits only — for the menu and page guards.
+  access: () => apiCall('/subscription/access'),
   checkout: (plan, cycle) => apiCall('/subscription/checkout', { method: 'POST', body: JSON.stringify({ plan, cycle }) }),
   verify: (payload) => apiCall('/subscription/verify', { method: 'POST', body: JSON.stringify(payload) }),
   failed: (orderId, reason) => apiCall('/subscription/failed', { method: 'POST', body: JSON.stringify({ orderId, reason }) }),

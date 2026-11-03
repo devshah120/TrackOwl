@@ -101,7 +101,7 @@ function App() {
       <Route
         path="/trips-and-documents"
         element={
-          <ProtectedRoute clientOnly resource="billing">
+          <ProtectedRoute clientOnly resource="billing" module="lr_documents">
             <TripsAndDocuments />
           </ProtectedRoute>
         }
@@ -109,7 +109,7 @@ function App() {
       <Route
         path="/add-new-trip"
         element={
-          <ProtectedRoute clientOnly resource="billing">
+          <ProtectedRoute clientOnly resource="billing" module="lr_documents">
             <AddNewTrip />
           </ProtectedRoute>
         }
@@ -117,7 +117,7 @@ function App() {
       <Route
         path="/add-new-trip/:id"
         element={
-          <ProtectedRoute clientOnly resource="billing">
+          <ProtectedRoute clientOnly resource="billing" module="lr_documents">
             <AddNewTrip />
           </ProtectedRoute>
         }
@@ -125,7 +125,7 @@ function App() {
       <Route
         path="/daily-ledger"
         element={
-          <ProtectedRoute clientOnly resource="ledger">
+          <ProtectedRoute clientOnly resource="ledger" module="finance">
             <DailyLedger />
           </ProtectedRoute>
         }
@@ -133,7 +133,7 @@ function App() {
       <Route
         path="/add-ledger-entry"
         element={
-          <ProtectedRoute clientOnly resource="ledger">
+          <ProtectedRoute clientOnly resource="ledger" module="finance">
             <AddLedgerEntry />
           </ProtectedRoute>
         }
@@ -141,7 +141,7 @@ function App() {
       <Route
         path="/add-ledger-entry/:id"
         element={
-          <ProtectedRoute clientOnly resource="ledger">
+          <ProtectedRoute clientOnly resource="ledger" module="finance">
             <AddLedgerEntry />
           </ProtectedRoute>
         }
@@ -181,7 +181,7 @@ function App() {
       <Route
         path="/live-tracking"
         element={
-          <ProtectedRoute clientOnly resource="tracking">
+          <ProtectedRoute clientOnly resource="tracking" module="gps_tracking">
             <FleetMap />
           </ProtectedRoute>
         }
@@ -189,7 +189,7 @@ function App() {
       <Route
         path="/trip-routes"
         element={
-          <ProtectedRoute clientOnly resource="tracking">
+          <ProtectedRoute clientOnly resource="tracking" module="gps_tracking">
             <TripRoutes />
           </ProtectedRoute>
         }
@@ -215,7 +215,7 @@ function App() {
       <Route
         path="/trips"
         element={
-          <ProtectedRoute clientOnly resource="trips">
+          <ProtectedRoute clientOnly resource="trips" module="trip_management">
             <TripManagement />
           </ProtectedRoute>
         }
@@ -223,7 +223,7 @@ function App() {
       <Route
         path="/trips/new"
         element={
-          <ProtectedRoute clientOnly resource="trips">
+          <ProtectedRoute clientOnly resource="trips" module="trip_management">
             <TripForm />
           </ProtectedRoute>
         }
@@ -232,7 +232,7 @@ function App() {
       <Route
         path="/trips/:id/edit"
         element={
-          <ProtectedRoute clientOnly resource="trips">
+          <ProtectedRoute clientOnly resource="trips" module="trip_management">
             <TripForm />
           </ProtectedRoute>
         }
@@ -240,7 +240,7 @@ function App() {
       <Route
         path="/trips/:id"
         element={
-          <ProtectedRoute clientOnly resource="trips">
+          <ProtectedRoute clientOnly resource="trips" module="trip_management">
             <TripDetail />
           </ProtectedRoute>
         }
@@ -274,7 +274,7 @@ function App() {
       <Route
         path="/fuel"
         element={
-          <ProtectedRoute clientOnly resource="fuel">
+          <ProtectedRoute clientOnly resource="fuel" module="fuel">
             <FuelManagement />
           </ProtectedRoute>
         }
@@ -284,7 +284,7 @@ function App() {
       <Route
         path="/fuel/new"
         element={
-          <ProtectedRoute clientOnly resource="fuel">
+          <ProtectedRoute clientOnly resource="fuel" module="fuel">
             <FuelForm />
           </ProtectedRoute>
         }
@@ -292,7 +292,7 @@ function App() {
       <Route
         path="/fuel/reports"
         element={
-          <ProtectedRoute clientOnly resource="fuel">
+          <ProtectedRoute clientOnly resource="fuel" module="fuel">
             <FuelReports />
           </ProtectedRoute>
         }
@@ -300,7 +300,7 @@ function App() {
       <Route
         path="/fuel/settings"
         element={
-          <ProtectedRoute clientOnly resource="fuel">
+          <ProtectedRoute clientOnly resource="fuel" module="fuel">
             <FuelSettings />
           </ProtectedRoute>
         }
@@ -308,7 +308,7 @@ function App() {
       <Route
         path="/fuel/:id"
         element={
-          <ProtectedRoute clientOnly resource="fuel">
+          <ProtectedRoute clientOnly resource="fuel" module="fuel">
             <FuelForm />
           </ProtectedRoute>
         }
@@ -322,7 +322,7 @@ function App() {
       <Route
         path="/maintenance"
         element={
-          <ProtectedRoute clientOnly resource="maintenance">
+          <ProtectedRoute clientOnly resource="maintenance" module="maintenance">
             <MaintenanceDashboard />
           </ProtectedRoute>
         }
@@ -330,7 +330,7 @@ function App() {
       <Route
         path="/maintenance/reminders"
         element={
-          <ProtectedRoute clientOnly resource="maintenance">
+          <ProtectedRoute clientOnly resource="maintenance" module="maintenance">
             <MaintenanceReminders />
           </ProtectedRoute>
         }
@@ -338,7 +338,7 @@ function App() {
       <Route
         path="/maintenance/reports"
         element={
-          <ProtectedRoute clientOnly resource="maintenance">
+          <ProtectedRoute clientOnly resource="maintenance" module="maintenance">
             <MaintenanceReports />
           </ProtectedRoute>
         }
@@ -346,7 +346,7 @@ function App() {
       <Route
         path="/maintenance/settings"
         element={
-          <ProtectedRoute clientOnly resource="maintenance">
+          <ProtectedRoute clientOnly resource="maintenance" module="maintenance">
             <MaintenanceSettings />
           </ProtectedRoute>
         }
@@ -356,7 +356,7 @@ function App() {
       <Route
         path="/maintenance/services"
         element={
-          <ProtectedRoute clientOnly resource="maintenance">
+          <ProtectedRoute clientOnly resource="maintenance" module="maintenance">
             <ServiceRecords />
           </ProtectedRoute>
         }
@@ -364,7 +364,7 @@ function App() {
       <Route
         path="/maintenance/services/new"
         element={
-          <ProtectedRoute clientOnly resource="maintenance">
+          <ProtectedRoute clientOnly resource="maintenance" module="maintenance">
             <ServiceForm />
           </ProtectedRoute>
         }
@@ -372,7 +372,7 @@ function App() {
       <Route
         path="/maintenance/services/:id"
         element={
-          <ProtectedRoute clientOnly resource="maintenance">
+          <ProtectedRoute clientOnly resource="maintenance" module="maintenance">
             <ServiceForm />
           </ProtectedRoute>
         }
@@ -383,7 +383,7 @@ function App() {
       <Route
         path="/maintenance/repairs"
         element={
-          <ProtectedRoute clientOnly resource="maintenance">
+          <ProtectedRoute clientOnly resource="maintenance" module="maintenance">
             <RepairRequests />
           </ProtectedRoute>
         }
@@ -391,7 +391,7 @@ function App() {
       <Route
         path="/maintenance/repairs/new"
         element={
-          <ProtectedRoute clientOnly resource="maintenance">
+          <ProtectedRoute clientOnly resource="maintenance" module="maintenance">
             <RepairForm />
           </ProtectedRoute>
         }
@@ -399,7 +399,7 @@ function App() {
       <Route
         path="/maintenance/repairs/:id/edit"
         element={
-          <ProtectedRoute clientOnly resource="maintenance">
+          <ProtectedRoute clientOnly resource="maintenance" module="maintenance">
             <RepairForm />
           </ProtectedRoute>
         }
@@ -407,7 +407,7 @@ function App() {
       <Route
         path="/maintenance/repairs/:id"
         element={
-          <ProtectedRoute clientOnly resource="maintenance">
+          <ProtectedRoute clientOnly resource="maintenance" module="maintenance">
             <RepairDetail />
           </ProtectedRoute>
         }
@@ -418,7 +418,7 @@ function App() {
       <Route
         path="/maintenance/tyres"
         element={
-          <ProtectedRoute clientOnly resource="maintenance">
+          <ProtectedRoute clientOnly resource="maintenance" module="maintenance">
             <TyreRegister />
           </ProtectedRoute>
         }
@@ -426,7 +426,7 @@ function App() {
       <Route
         path="/maintenance/tyres/:id"
         element={
-          <ProtectedRoute clientOnly resource="maintenance">
+          <ProtectedRoute clientOnly resource="maintenance" module="maintenance">
             <TyreDetail />
           </ProtectedRoute>
         }
@@ -434,7 +434,7 @@ function App() {
       <Route
         path="/maintenance/batteries"
         element={
-          <ProtectedRoute clientOnly resource="maintenance">
+          <ProtectedRoute clientOnly resource="maintenance" module="maintenance">
             <BatteryRegister />
           </ProtectedRoute>
         }
@@ -442,7 +442,7 @@ function App() {
       <Route
         path="/maintenance/batteries/:id"
         element={
-          <ProtectedRoute clientOnly resource="maintenance">
+          <ProtectedRoute clientOnly resource="maintenance" module="maintenance">
             <BatteryForm />
           </ProtectedRoute>
         }
@@ -452,7 +452,7 @@ function App() {
       <Route
         path="/finance"
         element={
-          <ProtectedRoute clientOnly resource="ledger">
+          <ProtectedRoute clientOnly resource="ledger" module="finance">
             <Finance />
           </ProtectedRoute>
         }
@@ -460,7 +460,7 @@ function App() {
       <Route
         path="/invoices"
         element={
-          <ProtectedRoute clientOnly resource="billing">
+          <ProtectedRoute clientOnly resource="billing" module="gst_invoicing">
             <Invoices />
           </ProtectedRoute>
         }
@@ -468,7 +468,7 @@ function App() {
       <Route
         path="/invoices/new"
         element={
-          <ProtectedRoute clientOnly resource="billing">
+          <ProtectedRoute clientOnly resource="billing" module="gst_invoicing">
             <InvoiceForm />
           </ProtectedRoute>
         }
@@ -476,7 +476,7 @@ function App() {
       <Route
         path="/invoices/:id/edit"
         element={
-          <ProtectedRoute clientOnly resource="billing">
+          <ProtectedRoute clientOnly resource="billing" module="gst_invoicing">
             <InvoiceForm />
           </ProtectedRoute>
         }
@@ -484,7 +484,7 @@ function App() {
       <Route
         path="/invoices/:id"
         element={
-          <ProtectedRoute clientOnly resource="billing">
+          <ProtectedRoute clientOnly resource="billing" module="gst_invoicing">
             <InvoiceDetail />
           </ProtectedRoute>
         }
@@ -492,7 +492,7 @@ function App() {
       <Route
         path="/vendors"
         element={
-          <ProtectedRoute clientOnly resource="ledger">
+          <ProtectedRoute clientOnly resource="ledger" module="finance">
             <Vendors />
           </ProtectedRoute>
         }
@@ -500,7 +500,7 @@ function App() {
       <Route
         path="/reports"
         element={
-          <ProtectedRoute clientOnly resource="reports">
+          <ProtectedRoute clientOnly resource="reports" module="reports">
             <Reports />
           </ProtectedRoute>
         }
@@ -508,7 +508,7 @@ function App() {
       <Route
         path="/alerts"
         element={
-          <ProtectedRoute clientOnly resource="tracking">
+          <ProtectedRoute clientOnly resource="tracking" module="alerts_geofence">
             <Alerts />
           </ProtectedRoute>
         }
@@ -527,7 +527,7 @@ function App() {
       <Route
         path="/driver"
         element={
-          <ProtectedRoute clientOnly resource="trips">
+          <ProtectedRoute clientOnly resource="trips" module="driver_app">
             <DriverApp />
           </ProtectedRoute>
         }
@@ -553,7 +553,7 @@ function App() {
       <Route
         path="/integrations"
         element={
-          <ProtectedRoute clientOnly>
+          <ProtectedRoute clientOnly module="integrations">
             <Integrations />
           </ProtectedRoute>
         }

@@ -1,6 +1,8 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
+import { usePlan } from '../hooks/usePlan';
+import { UpgradeRequired } from './UpgradeRequired';
 
 // `requireSuperAdmin` gates a page to superadmin only, bouncing a client to their
 // dashboard. `clientOnly` is the reverse: gates a page to regular clients,
@@ -16,9 +18,14 @@ export function ProtectedRoute({
   requireSuperAdmin = false,
   clientOnly = false,
   resource = null,
+  // The plan module the page belongs to (services/planCatalog.js on the
+  // server). A plan without it shows an upgrade screen instead of a page
+  // whose every call would be refused.
+  module = null,
 }) {
   const { isAuthenticated, isInitialized, isSuperAdmin } = useAuth();
   const { canAccess } = usePermissions();
+  const plan = usePlan();
 
   if (!isInitialized) {
     return (
@@ -45,6 +52,10 @@ export function ProtectedRoute({
 
   if (resource && !canAccess(resource)) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  if (module && !plan.has(module)) {
+    return <UpgradeRequired module={module} />;
   }
 
   return children;

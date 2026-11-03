@@ -4,6 +4,7 @@ import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
+import { usePlan } from '../hooks/usePlan';
 import { roleLabel } from '../constants/roles';
 import { notifications as notificationsApi } from '../services/api';
 
@@ -46,7 +47,7 @@ const timeAgo = (iso) => {
 // are superadmin-only pages, so neither child carries a `resource`.
 const CLIENT_NAV_ITEMS = [
   // The phone-first driver screen, shown to Driver seats only.
-  { id: 'driverapp', label: 'Driver App', icon: Smartphone, path: '/driver', match: ['/driver$'], driverOnly: true },
+  { id: 'driverapp', label: 'Driver App', icon: Smartphone, path: '/driver', match: ['/driver$'], driverOnly: true, module: 'driver_app' },
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/dashboard', match: ['dashboard'] },
   // Tracking: the live map, the drawn GPS routes, and the alerts the tracker
   // raises (with the geofences that drive them).
@@ -57,9 +58,9 @@ const CLIENT_NAV_ITEMS = [
     path: '/live-tracking',
     match: ['/live-tracking', '/trip-routes', '/alerts'],
     children: [
-      { id: 'tracking-live', label: 'Live Tracking', icon: MapPin, path: '/live-tracking', match: ['/live-tracking'], resource: 'tracking' },
-      { id: 'tracking-routes', label: 'Trip Routes', icon: Route, path: '/trip-routes', match: ['/trip-routes'], resource: 'tracking' },
-      { id: 'tracking-alerts', label: 'Alerts & Geofences', icon: BellRing, path: '/alerts', match: ['/alerts'], resource: 'tracking' },
+      { id: 'tracking-live', label: 'Live Tracking', icon: MapPin, path: '/live-tracking', match: ['/live-tracking'], resource: 'tracking', module: 'gps_tracking' },
+      { id: 'tracking-routes', label: 'Trip Routes', icon: Route, path: '/trip-routes', match: ['/trip-routes'], resource: 'tracking', module: 'gps_tracking' },
+      { id: 'tracking-alerts', label: 'Alerts & Geofences', icon: BellRing, path: '/alerts', match: ['/alerts'], resource: 'tracking', module: 'alerts_geofence' },
     ],
   },
   // Trips: the operational trip (lifecycle, POD, settlement) leads; the LR /
@@ -71,8 +72,8 @@ const CLIENT_NAV_ITEMS = [
     path: '/trips',
     match: ['/trips$', '/trips/', 'trips-and-documents', 'add-new-trip', '/customers'],
     children: [
-      { id: 'tripmgmt-trips', label: 'Trips', icon: ClipboardList, path: '/trips', match: ['/trips$', '/trips/'], resource: 'trips' },
-      { id: 'trips', label: 'LR & Documents', icon: FileText, path: '/trips-and-documents', match: ['trips-and-documents', 'add-new-trip'], resource: 'billing' },
+      { id: 'tripmgmt-trips', label: 'Trips', icon: ClipboardList, path: '/trips', match: ['/trips$', '/trips/'], resource: 'trips', module: 'trip_management' },
+      { id: 'trips', label: 'LR & Documents', icon: FileText, path: '/trips-and-documents', match: ['trips-and-documents', 'add-new-trip'], resource: 'billing', module: 'lr_documents' },
       { id: 'tripmgmt-customers', label: 'Customers', icon: Building2, path: '/customers', match: ['/customers'], resource: 'customers' },
     ],
   },
@@ -87,7 +88,7 @@ const CLIENT_NAV_ITEMS = [
       { id: 'fleet-drivers', label: 'Drivers', icon: UserRound, path: '/drivers', match: ['drivers', 'add-new-driver'], resource: 'drivers' },
       // Fuel sits under Fleet rather than beside Trips: a filling belongs to a
       // vehicle, and plenty of them happen with no trip at all.
-      { id: 'fleet-fuel', label: 'Fuel', icon: Fuel, path: '/fuel', match: ['/fuel'], resource: 'fuel' },
+      { id: 'fleet-fuel', label: 'Fuel', icon: Fuel, path: '/fuel', match: ['/fuel'], resource: 'fuel', module: 'fuel' },
     ],
   },
   // Maintenance Management. Its own top-level group rather than a child of
@@ -104,12 +105,12 @@ const CLIENT_NAV_ITEMS = [
     path: '/maintenance',
     match: ['/maintenance'],
     children: [
-      { id: 'maint-dashboard', label: 'Overview', icon: LayoutDashboard, path: '/maintenance', match: ['/maintenance$'], resource: 'maintenance' },
-      { id: 'maint-services', label: 'Service Records', icon: ClipboardList, path: '/maintenance/services', match: ['/maintenance/services'], resource: 'maintenance' },
-      { id: 'maint-repairs', label: 'Repairs', icon: Wrench, path: '/maintenance/repairs', match: ['/maintenance/repairs'], resource: 'maintenance' },
-      { id: 'maint-reminders', label: 'Reminders', icon: CalendarClock, path: '/maintenance/reminders', match: ['/maintenance/reminders'], resource: 'maintenance' },
-      { id: 'maint-tyres', label: 'Tyres', icon: Disc3, path: '/maintenance/tyres', match: ['/maintenance/tyres'], resource: 'maintenance' },
-      { id: 'maint-batteries', label: 'Batteries', icon: BatteryCharging, path: '/maintenance/batteries', match: ['/maintenance/batteries'], resource: 'maintenance' },
+      { id: 'maint-dashboard', label: 'Overview', icon: LayoutDashboard, path: '/maintenance', match: ['/maintenance$'], resource: 'maintenance', module: 'maintenance' },
+      { id: 'maint-services', label: 'Service Records', icon: ClipboardList, path: '/maintenance/services', match: ['/maintenance/services'], resource: 'maintenance', module: 'maintenance' },
+      { id: 'maint-repairs', label: 'Repairs', icon: Wrench, path: '/maintenance/repairs', match: ['/maintenance/repairs'], resource: 'maintenance', module: 'maintenance' },
+      { id: 'maint-reminders', label: 'Reminders', icon: CalendarClock, path: '/maintenance/reminders', match: ['/maintenance/reminders'], resource: 'maintenance', module: 'maintenance' },
+      { id: 'maint-tyres', label: 'Tyres', icon: Disc3, path: '/maintenance/tyres', match: ['/maintenance/tyres'], resource: 'maintenance', module: 'maintenance' },
+      { id: 'maint-batteries', label: 'Batteries', icon: BatteryCharging, path: '/maintenance/batteries', match: ['/maintenance/batteries'], resource: 'maintenance', module: 'maintenance' },
     ],
   },
   // Finance: the P&L and profitability, the receivables and payables, and the
@@ -121,13 +122,13 @@ const CLIENT_NAV_ITEMS = [
     path: '/finance',
     match: ['/finance', '/invoices', '/vendors', 'daily-ledger', 'add-ledger-entry'],
     children: [
-      { id: 'finance-pnl', label: 'Finance & Profit', icon: LineChart, path: '/finance', match: ['/finance'], resource: 'ledger' },
-      { id: 'finance-invoices', label: 'Invoices & Payments', icon: Receipt, path: '/invoices', match: ['/invoices'], resource: 'billing' },
-      { id: 'finance-vendors', label: 'Vendors & Bills', icon: Store, path: '/vendors', match: ['/vendors'], resource: 'ledger' },
-      { id: 'ledger', label: 'Daily Ledger', icon: Calendar, path: '/daily-ledger', match: ['daily-ledger', 'add-ledger-entry'], resource: 'ledger' },
+      { id: 'finance-pnl', label: 'Finance & Profit', icon: LineChart, path: '/finance', match: ['/finance'], resource: 'ledger', module: 'finance' },
+      { id: 'finance-invoices', label: 'Invoices & Payments', icon: Receipt, path: '/invoices', match: ['/invoices'], resource: 'billing', module: 'gst_invoicing' },
+      { id: 'finance-vendors', label: 'Vendors & Bills', icon: Store, path: '/vendors', match: ['/vendors'], resource: 'ledger', module: 'finance' },
+      { id: 'ledger', label: 'Daily Ledger', icon: Calendar, path: '/daily-ledger', match: ['daily-ledger', 'add-ledger-entry'], resource: 'ledger', module: 'finance' },
     ],
   },
-  { id: 'reports', label: 'Reports', icon: FileBarChart, path: '/reports', match: ['/reports'], resource: 'reports' },
+  { id: 'reports', label: 'Reports', icon: FileBarChart, path: '/reports', match: ['/reports'], resource: 'reports', module: 'reports' },
   {
     id: 'settings-group',
     label: 'Settings',
@@ -138,7 +139,7 @@ const CLIENT_NAV_ITEMS = [
       { id: 'settings', label: 'Company & Users', icon: Settings, path: '/settings', match: ['settings'] },
       { id: 'billing', label: 'Plan & Billing', icon: CreditCard, path: '/billing', match: ['/billing'] },
       // Webhooks send the account's data elsewhere — the account owner's call.
-      { id: 'integrations', label: 'Integrations', icon: Plug, path: '/integrations', match: ['/integrations'], adminOnly: true },
+      { id: 'integrations', label: 'Integrations', icon: Plug, path: '/integrations', match: ['/integrations'], adminOnly: true, module: 'integrations' },
     ],
   },
 ];
@@ -192,6 +193,7 @@ export function Topbar({ activeMenu, onMenuChange }) {
   const navigate = useNavigate();
   const { user, logout, isSuperAdmin } = useAuth();
   const { canAccess, isAccountOwner, role } = usePermissions();
+  const plan = usePlan();
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -251,7 +253,9 @@ export function Topbar({ activeMenu, onMenuChange }) {
   // Hide what the seat cannot reach, at both levels: a child is dropped when its
   // own resource is ungranted, and a parent is dropped once nothing is left
   // under it (or its own resource is ungranted).
+  // Shown when the role may use it AND the account's plan includes it.
   const visible = (item) =>
+    (!item.module || plan.has(item.module)) &&
     (!item.resource || canAccess(item.resource)) &&
     (!item.adminOnly || isAccountOwner) &&
     (!item.driverOnly || role === 'driver');
