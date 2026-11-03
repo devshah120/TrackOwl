@@ -21,6 +21,13 @@ export const apiCall = async (endpoint, options = {}) => {
 
   const data = await response.json();
 
+  // An account whose plan has lapsed is blocked server-side with 402. Send
+  // the user to the billing page (once — not from the billing page itself),
+  // where the account owner can renew.
+  if (response.status === 402 && data?.code === 'SUBSCRIPTION_REQUIRED' && !window.location.pathname.startsWith('/billing')) {
+    window.location.assign('/billing?expired=1');
+  }
+
   if (!response.ok) {
     throw {
       status: response.status,
@@ -1123,6 +1130,42 @@ export const components = {
 };
 
 export const publicTrip = (token) => apiCall(`/trips/public/${token}`);
+
+// The plan picked on the public pricing page, carried through sign-up or
+// sign-in so the account lands on checkout with it selected.
+export const readPendingPlan = () => {
+  try {
+    return JSON.parse(sessionStorage.getItem('to_pending_plan') || 'null');
+  } catch {
+    return null;
+  }
+};
+
+// Plans & billing. `plans` is public (the pricing page); `subscription` is the
+// signed-in account's own plan and its Razorpay checkout.
+export const plans = {
+  publicList: () => apiCall('/plans'),
+};
+
+export const subscription = {
+  get: () => apiCall('/subscription'),
+  checkout: (plan, cycle) => apiCall('/subscription/checkout', { method: 'POST', body: JSON.stringify({ plan, cycle }) }),
+  verify: (payload) => apiCall('/subscription/verify', { method: 'POST', body: JSON.stringify(payload) }),
+  failed: (orderId, reason) => apiCall('/subscription/failed', { method: 'POST', body: JSON.stringify({ orderId, reason }) }),
+};
+
+// Super Admin: plans, billing settings, client subscriptions and payments.
+export const adminBilling = {
+  plans: () => apiCall('/admin/billing/plans'),
+  createPlan: (payload) => apiCall('/admin/billing/plans', { method: 'POST', body: JSON.stringify(payload) }),
+  updatePlan: (id, payload) => apiCall(`/admin/billing/plans/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  removePlan: (id) => apiCall(`/admin/billing/plans/${id}`, { method: 'DELETE' }),
+  settings: () => apiCall('/admin/billing/settings'),
+  saveSettings: (payload) => apiCall('/admin/billing/settings', { method: 'PUT', body: JSON.stringify(payload) }),
+  subscriptions: (status) => apiCall(`/admin/billing/subscriptions${toQuery({ status })}`),
+  act: (owner, payload) => apiCall(`/admin/billing/subscriptions/${owner}/action`, { method: 'POST', body: JSON.stringify(payload) }),
+  payments: (status) => apiCall(`/admin/billing/payments${toQuery({ status })}`),
+};
 
 // Fetches a token-protected file (PDF, CSV) and hands it to the browser as a
 // download. Same reason as billing.downloadDocument: a plain navigation cannot

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin, ShieldCheck, Users, UserRound, Cpu, History, ClipboardList, Building2, Fuel, Wrench, CalendarClock, Disc3, BatteryCharging, Navigation, BellRing, IndianRupee, Receipt, Store, FileBarChart, LineChart, Smartphone, Plug } from 'lucide-react';
+import { LayoutDashboard, FileText, Calendar, Truck, Settings, LogOut, Menu, X, ChevronDown, Bell, Route, MapPin, ShieldCheck, Users, UserRound, Cpu, History, ClipboardList, Building2, Fuel, Wrench, CalendarClock, Disc3, BatteryCharging, Navigation, BellRing, IndianRupee, Receipt, Store, FileBarChart, LineChart, Smartphone, Plug, CreditCard } from 'lucide-react';
 import { AiOutlineFullscreen, AiOutlineFullscreenExit } from 'react-icons/ai';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -133,9 +133,10 @@ const CLIENT_NAV_ITEMS = [
     label: 'Settings',
     icon: Settings,
     path: '/settings',
-    match: ['settings', '/integrations'],
+    match: ['settings', '/integrations', '/billing'],
     children: [
       { id: 'settings', label: 'Company & Users', icon: Settings, path: '/settings', match: ['settings'] },
+      { id: 'billing', label: 'Plan & Billing', icon: CreditCard, path: '/billing', match: ['/billing'] },
       // Webhooks send the account's data elsewhere — the account owner's call.
       { id: 'integrations', label: 'Integrations', icon: Plug, path: '/integrations', match: ['/integrations'], adminOnly: true },
     ],
@@ -148,6 +149,7 @@ const CLIENT_NAV_ITEMS = [
 const SUPERADMIN_NAV_ITEMS = [
   { id: 'admin-overview', label: 'Overview', icon: LayoutDashboard, path: '/admin/overview', match: ['admin/overview'] },
   { id: 'admin-clients', label: 'Clients', icon: Users, path: '/admin/clients', match: ['admin/clients'] },
+  { id: 'admin-plans', label: 'Plans & Billing', icon: CreditCard, path: '/admin/plans', match: ['admin/plans'] },
   {
     id: 'admin-fleet',
     label: 'Fleet Oversight',

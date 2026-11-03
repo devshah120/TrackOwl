@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from './Button';
 import { Check, User, Users } from 'lucide-react';
+import { plans as plansApi } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
-export const Pricing = () => {
-  const [isYearly, setIsYearly] = useState(false);
-
-  const plans = [
+// The plans shown before the server answers (and if it cannot be reached).
+// The live list is managed by the Super Admin under Admin → Plans & Billing.
+const FALLBACK_PLANS = [
     {
       name: 'Starter',
       description: 'For small fleets',
@@ -59,6 +61,41 @@ export const Pricing = () => {
     },
   ];
 
+export const Pricing = () => {
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const [isYearly, setIsYearly] = useState(false);
+  const [plans, setPlans] = useState(FALLBACK_PLANS);
+  const [trialDays, setTrialDays] = useState(14);
+
+  useEffect(() => {
+    let cancelled = false;
+    plansApi
+      .publicList()
+      .then((r) => {
+        if (cancelled || !r.plans?.length) return;
+        setPlans(r.plans);
+        setTrialDays(r.trialDays);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Remember the choice across sign-up / sign-in, then land on billing with
+  // it selected. A signed-in visitor goes straight there.
+  const choose = (plan) => {
+    const cycle = isYearly ? 'yearly' : 'monthly';
+    const key = plan.key || plan.name.toLowerCase();
+    try {
+      sessionStorage.setItem('to_pending_plan', JSON.stringify({ plan: key, cycle }));
+    } catch {
+      // storage blocked — the billing page still lets them pick
+    }
+    navigate(isAuthenticated ? `/billing?plan=${encodeURIComponent(key)}&cycle=${cycle}` : '/register');
+  };
+
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -101,6 +138,7 @@ export const Pricing = () => {
           </h2>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-8">
             Choose the perfect plan for your fleet. Always flexible, always fair.
+            {trialDays > 0 && ` Start with a ${trialDays}-day free trial.`}
           </p>
 
           {/* Toggle */}
@@ -192,7 +230,7 @@ export const Pricing = () => {
                         <span className={`text-5xl font-bold ${
                           plan.highlight ? 'text-blue-600' : 'text-gray-900'
                         }`}>
-                          ₹{isYearly ? plan.yearlyPrice.toLocaleString() : plan.monthlyPrice.toLocaleString()}
+                          ₹{(isYearly ? plan.yearlyPrice : plan.monthlyPrice).toLocaleString('en-IN')}
                         </span>
                       </motion.div>
                     </AnimatePresence>
@@ -204,7 +242,7 @@ export const Pricing = () => {
                     plan.highlight ? 'text-gray-600' : 'text-gray-600'
                   }`}>
                     {isYearly
-                      ? `₹${(plan.yearlyPrice / 12).toLocaleString()}/month billed annually`
+                      ? `₹${Math.round(plan.yearlyPrice / 12).toLocaleString('en-IN')}/month billed annually`
                       : 'Billed monthly'}
                   </p>
                 </div>
@@ -213,6 +251,7 @@ export const Pricing = () => {
                   variant={plan.highlight ? 'accent' : 'primary'}
                   size="lg"
                   className="w-full mb-8"
+                  onClick={() => choose(plan)}
                 >
                   Get Started
                 </Button>

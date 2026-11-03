@@ -3,6 +3,7 @@ import { Eye, EyeOff, User, Mail, Phone, Lock, Building2, Check } from 'lucide-r
 import { useNavigate } from 'react-router-dom';
 import loginTruckImg from '../assets/login-truck.jpg';
 import { useAuth } from '../context/AuthContext';
+import { readPendingPlan } from '../services/api';
 
 export function Register({ onBackHome }) {
   const [step, setStep] = useState(1);
@@ -407,7 +408,15 @@ export function Register({ onBackHome }) {
               <div className="text-5xl mb-4">🎉</div>
               <h2 className="text-2xl font-bold text-slate-900 mb-2 font-display">Welcome to TrackOwl!</h2>
               <p className="text-slate-600 mb-6">Your account has been created successfully!</p>
-              <button onClick={() => navigate('/dashboard')} className="inline-block w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors text-center">
+              {/* A plan chosen on the pricing page takes the new account straight
+                  to checkout; otherwise it starts on the free trial. */}
+              <button
+                onClick={() => {
+                  const pending = readPendingPlan();
+                  navigate(pending ? `/billing?plan=${encodeURIComponent(pending.plan)}&cycle=${pending.cycle}` : '/dashboard');
+                }}
+                className="inline-block w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-lg transition-colors text-center"
+              >
                 Open Dashboard →
               </button>
             </div>

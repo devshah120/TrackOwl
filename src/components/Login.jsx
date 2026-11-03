@@ -4,6 +4,7 @@ import { FaWhatsapp } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import loginTruckImg from '../assets/login-truck.jpg';
 import { useAuth } from '../context/AuthContext';
+import { readPendingPlan } from '../services/api';
 
 export function Login({ onBackHome }) {
   const [email, setEmail] = useState('');
@@ -47,7 +48,16 @@ export function Login({ onBackHome }) {
 
       setTimeout(() => {
         // A Driver seat lands on the phone-first driver app, not the office dashboard.
-        const home = response.user.role === 'superadmin' ? '/admin/overview' : response.user.role === 'driver' ? '/driver' : '/dashboard';
+        const pending = readPendingPlan();
+        const role = response.user.role;
+        const home =
+          role === 'superadmin' || role === 'super_admin'
+            ? '/admin/overview'
+            : role === 'driver'
+              ? '/driver'
+              : pending
+                ? `/billing?plan=${encodeURIComponent(pending.plan)}&cycle=${pending.cycle}`
+                : '/dashboard';
         navigate(home);
       }, 700);
     } catch (err) {

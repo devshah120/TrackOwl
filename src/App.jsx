@@ -67,6 +67,8 @@ import { Alerts } from './pages/Alerts';
 import { DriverProfile } from './pages/DriverProfile';
 import { DriverApp } from './pages/DriverApp';
 import { Integrations } from './pages/Integrations';
+import { Billing } from './pages/Billing';
+import { AdminPlans } from './pages/admin/AdminPlans';
 
 function App() {
   const navigate = useNavigate();
@@ -527,6 +529,24 @@ function App() {
         element={
           <ProtectedRoute clientOnly resource="trips">
             <DriverApp />
+          </ProtectedRoute>
+        }
+      />
+      {/* Plan & Billing: any signed-in client seat may see it (and is sent
+          here when the plan has lapsed); only the account owner can pay. */}
+      <Route
+        path="/billing"
+        element={
+          <ProtectedRoute clientOnly>
+            <Billing />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/plans"
+        element={
+          <ProtectedRoute requireSuperAdmin>
+            <AdminPlans />
           </ProtectedRoute>
         }
       />
